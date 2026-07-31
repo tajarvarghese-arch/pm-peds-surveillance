@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-31T01:01:12+00:00",
+ "generated_at": "2026-07-31T01:04:52+00:00",
  "markets": {
   "states": [
    "New York",
@@ -13,92 +13,15 @@
   ]
  },
  "sources": {
-  "ed_age": {
-   "source": "CDC NSSP ED Visits by Demographics",
-   "dataset": "7xva-uux8",
-   "geography": "United States only (no state breakout exists)",
-   "cadence": "weekly",
-   "note": "Primary pediatric volume proxy. Age bands <1/1-4/5-17.",
-   "rows": 199,
-   "ok": true,
-   "first": "2022-10-01",
-   "last": "2026-07-18"
-  },
-  "ed_state": {
-   "source": "CDC NSSP ED Respiratory Daily",
-   "dataset": "vjzj-u7u8",
-   "geography": "NY / NJ / CT / US",
-   "cadence": "daily",
-   "note": "Freshest feed. No age breakout -- all ages.",
-   "rows": 1400,
-   "ok": true,
-   "first": "2022-09-25",
-   "last": "2026-07-25"
-  },
-  "naat_multi": {
-   "source": "CDC NAAT percent positivity by respiratory virus",
-   "dataset": "rgnm-fkqb",
-   "geography": "National / HHS Region 1 / HHS Region 2",
-   "cadence": "weekly",
-   "note": "PIV, HMPV, Adenovirus, RV/EV, HCOV, RSV, SARS-CoV-2. NO influenza.",
-   "rows": 368,
-   "ok": true,
-   "first": "2019-07-06",
-   "last": "2026-07-18"
-  },
-  "pos_national": {
-   "source": "CDC Percent of Tests Positive for Viral Respiratory Pathogens",
-   "dataset": "seuz-s2cv",
-   "geography": "United States",
-   "cadence": "weekly",
-   "note": "Only live source of influenza positivity. National only.",
-   "rows": 199,
-   "ok": true,
-   "first": "2022-10-01",
-   "last": "2026-07-18"
-  },
-  "ari_level": {
-   "source": "CDC Level of Acute Respiratory Illness Activity",
-   "dataset": "f3zz-zga5",
-   "geography": "NY / NJ / CT",
-   "cadence": "weekly",
-   "note": "Categorical activity level.",
-   "rows": 1,
-   "ok": true,
-   "first": "2026-07-18",
-   "last": "2026-07-18"
-  },
-  "respnet": {
-   "source": "CDC RESP-NET (FluSurv/COVID/RSV-NET)",
-   "dataset": "kvib-3txy",
-   "geography": "Overall (network catchment)",
-   "cadence": "weekly",
-   "note": "Pediatric hospitalization rates per 100k. Severity denominator.",
-   "rows": 386,
-   "ok": true,
-   "first": "2018-10-06",
-   "last": "2026-07-18"
-  },
-  "igas": {
-   "source": "CDC ABCs Group A Streptococcus",
-   "dataset": "9y49-tura",
-   "geography": "ABCs catchment",
-   "cadence": "ANNUAL",
-   "note": "Annual only. No weekly public iGAS feed exists. Not a leading indicator.",
-   "rows": 1535,
-   "ok": true,
-   "first": 1997,
-   "last": 2024
-  },
   "ww_covid": {
    "source": "CDC NWSS Wastewater -- SARS-CoV-2",
    "dataset": "j9g8-acpt",
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 133,
+   "rows": 203,
    "ok": true,
-   "first": "2024-01-01",
+   "first": "2022-08-29",
    "last": "2026-07-13"
   },
   "ww_flu": {
@@ -107,9 +30,9 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 133,
+   "rows": 181,
    "ok": true,
-   "first": "2024-01-01",
+   "first": "2023-01-30",
    "last": "2026-07-13"
   }
  }

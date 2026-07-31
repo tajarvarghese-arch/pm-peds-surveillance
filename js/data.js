@@ -72,6 +72,27 @@ export function series(rows, key, dateKey = 'week') {
   return out;
 }
 
+/**
+ * Collapse a daily series to weekly means keyed to the MONDAY that starts the
+ * week -- the exact bucketing scripts/fetch_data.py uses for wastewater. Any
+ * cross-correlation between ED and wastewater must share this key, or the two
+ * series sit a fractional week apart and every lag estimate shifts.
+ */
+export function toWeeklyMonday(points) {
+  const buckets = new Map();
+  for (const p of points) {
+    const d = new Date(p.t + 'T00:00:00Z');
+    const dow = (d.getUTCDay() + 6) % 7; // Mon=0
+    d.setUTCDate(d.getUTCDate() - dow);
+    const k = d.toISOString().slice(0, 10);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(p.v);
+  }
+  return [...buckets.entries()]
+    .map(([t, vs]) => ({ t, v: vs.reduce((a, b) => a + b, 0) / vs.length }))
+    .sort((a, b) => (a.t < b.t ? -1 : 1));
+}
+
 /** Collapse a daily series to weekly means, keyed to week-ending Saturday. */
 export function toWeekly(points) {
   const buckets = new Map();

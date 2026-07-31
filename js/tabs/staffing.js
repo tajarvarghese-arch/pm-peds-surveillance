@@ -4,8 +4,9 @@
 import { panel, num, delta, levelBadge, empty, tile, noteGap } from '../ui.js';
 import { line, hexA } from '../charts.js';
 import { TIERS, ACCEL, MARKETS, PED_AGES, PROVENANCE_GAPS, VISIT_MIX } from '../config.js';
-import { pressureIndex, staffing, d1, d2, percentileRank, quantile, indexQuantum, ordinal }
-  from '../derive.js';
+import { pressureIndex, staffing, d1, d2, percentileRank, quantile, indexQuantum, ordinal,
+  wastewaterSignal, corroborate } from '../derive.js';
+import { wwSeries } from './wastewater.js';
 import { toWeekly, fmtDate } from '../data.js';
 import { rerender } from '../app.js';
 
@@ -19,6 +20,13 @@ export default function staffingTab(root, ctx) {
   const alert = staffing(ppi, quantum);
   const vals = ppi.map((p) => p.v).sort((a, b) => a - b);
   const cuts = TIERS.map((t) => ({ ...t, at: quantile(vals, t.pct / 100) }));
+
+  // Independent read from wastewater. Advisory only -- see corroborate().
+  const wwSignals = Object.fromEntries(MARKETS.states.map((full) => {
+    const ab = MARKETS.abbr[full];
+    return [ab, wastewaterSignal(wwSeries(ctx.db, 'ww_covid', ab))];
+  }));
+  const corr = corroborate(alert, wwSignals);
 
   root.innerHTML = `
     <div class="grid g-2-1" style="margin-bottom:10px">
@@ -52,6 +60,39 @@ export default function staffingTab(root, ctx) {
 
       ${panel('Visit mix', 'assumption — drives the index', mixControls(ctx))}
     </div>
+
+    ${panel('Wastewater corroboration', 'independent signal · advisory, never moves the multiplier',
+      `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-size:16px;font-weight:700" class="s-${corr.cls}">
+          ${levelBadge(corr.verdict, corr.cls)}
+        </div>
+        <div style="flex:1;min-width:260px;color:#7f8ea0;font-size:11px">${corr.detail}</div>
+      </div>
+      <table class="dt">
+        <thead><tr><th>Mkt</th><th>WW pctile</th><th>3wk trend</th><th>Direction</th><th>n wks</th></tr></thead>
+        <tbody>${MARKETS.states.map((full) => {
+          const ab = MARKETS.abbr[full];
+          const s = wwSignals[ab];
+          if (!s) return `<tr><td>${ab}</td><td class="num" colspan="4" style="color:#4b5a6b">no signal</td></tr>`;
+          const dir = s.dir === 'rising' ? '<span class="s-critical">▲ rising</span>'
+            : s.dir === 'falling' ? '<span class="s-ok">▼ falling</span>'
+            : '<span style="color:#7f8ea0">■ flat</span>';
+          return `<tr>
+            <td>${ab}</td>
+            <td class="num ${s.pct >= 75 ? 's-elevated' : ''}">${ordinal(s.pct)}</td>
+            <td class="num">${delta(s.trendPct)}</td>
+            <td style="text-align:left">${dir}</td>
+            <td class="num" style="color:#4b5a6b">${s.n}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      <div class="note">Wastewater growth rates correlate with ED growth rates far more weakly than
+      their levels do (see the Wastewater tab for the measured curve), so this panel cannot promote a
+      tier. Its value is that concentration is continuous:
+      when the ED index is pinned to its 0.1pp quantisation floor, this is the only series still able
+      to show direction. See the Wastewater tab for the measured lead/lag curve.</div>`)}
+
+    <div style="height:10px"></div>
 
     ${panel('Recalibrated thresholds', 'derived from this series, not transplanted from ILINet',
       thresholdTable(cuts, alert))}

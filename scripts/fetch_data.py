@@ -262,7 +262,9 @@ def wastewater(dataset, label):
     rows = paged(
         dataset,
         where=(
-            f"state_territory in({quoted}) AND sample_collect_date > '2024-01-01' "
+            # Match the NSSP ED record so lead/lag can be tested over every
+            # wave we have clinical data for, not just the last two years.
+            f"state_territory in({quoted}) AND sample_collect_date > '2022-09-01' "
             # NWSS mixes liquid and solids assays in the same column. Solids
             # (copies/g dry sludge) run orders of magnitude above liquid
             # (copies/l wastewater); averaging them together produces a series

@@ -4,7 +4,8 @@ import { panel, tile, num, delta, levelBadge, labelsFrom, valuesFrom, empty } fr
 import { line, hexA, sparkline } from '../charts.js';
 import { PATHOGENS, PED_AGES, MARKETS } from '../config.js';
 import { pressureIndex, staffing, d1, d2, seasonalBands, isoWeek, seasonOf, percentileRank,
-  indexQuantum } from '../derive.js';
+  indexQuantum, wastewaterSignal, corroborate } from '../derive.js';
+import { wwSeries } from './wastewater.js';
 import { series, toWeekly, fmtDate } from '../data.js';
 
 export default function exec(root, ctx) {
@@ -22,6 +23,12 @@ export default function exec(root, ctx) {
   const first = d1(ppi, quantum);
   const second = d2(first);
   const cur = ppi.at(-1);
+
+  const wwSignals = Object.fromEntries(MARKETS.states.map((full) => {
+    const ab = MARKETS.abbr[full];
+    return [ab, wastewaterSignal(wwSeries(ctx.db, 'ww_covid', ab))];
+  }));
+  const corr = corroborate(alert, wwSignals);
 
   // --- headline tiles -----------------------------------------------------
   const tiles = [
@@ -44,6 +51,8 @@ export default function exec(root, ctx) {
     tile('d2 · acceleration', delta(alert.d2, { suffix: 'pp', noisy: alert.noisy }),
          alert.noisy ? 'suppressed at resolution floor'
            : alert.d2 > 0 ? 'curve bending upward' : 'curve flattening or bending down', ''),
+    tile('Wastewater check', levelBadge(corr.verdict, corr.cls),
+         'independent signal · advisory only', ''),
   ];
 
   // --- season overlay -----------------------------------------------------
@@ -73,7 +82,8 @@ export default function exec(root, ctx) {
   const statusRows = pathogenStatus(posNat, naat, edAge, ctx.region);
 
   root.innerHTML = `
-    <div class="grid g4" style="margin-bottom:10px">${tiles.join('')}</div>
+    <div class="grid g5" style="margin-bottom:10px">${tiles.join('')}</div>
+    <div class="note" style="margin:-4px 0 10px">${corr.detail}</div>
 
     <div class="grid g-2-1" style="margin-bottom:10px">
       ${panel('Season overlay — pediatric pressure index',

@@ -9,6 +9,7 @@ import pathogensTab from './tabs/pathogens.js';
 import historicalTab from './tabs/historical.js';
 import forecastTab from './tabs/forecast.js';
 import geoTab from './tabs/geo.js';
+import wastewaterTab from './tabs/wastewater.js';
 import staffingTab from './tabs/staffing.js';
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'historical', label: 'Historical', mod: historicalTab },
   { id: 'forecast', label: 'Forecast & d1/d2', mod: forecastTab },
   { id: 'geo', label: 'Geography', mod: geoTab },
+  { id: 'wastewater', label: 'Wastewater', mod: wastewaterTab },
   { id: 'staffing', label: 'Staffing', mod: staffingTab },
 ];
 

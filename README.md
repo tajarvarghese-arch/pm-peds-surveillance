@@ -85,6 +85,26 @@ with fewer than 5 samples are dropped (the newest week is often one plant
 reporting early). Series are indexed to each state's own median because absolute
 concentrations are not comparable across labs.
 
+**Wastewater is corroboration, not an early-warning trigger.** Measured on this
+repo's own data (n≈200 weeks, NY/NJ/CT), SARS-CoV-2 wastewater vs ED COVID share:
+
+| | Level correlation | Growth-rate correlation |
+|---|---|---|
+| NY | r=0.72 @ lag +1wk | r=0.30 |
+| NJ | r=0.82 @ lag +1wk | r=0.49 |
+| CT | r=0.83 @ lag 0 | r=0.42 |
+
+Levels track strongly, but levels share a seasonal wave — that inflates the
+number. Week-over-week *growth* is what would justify an early-warning trigger,
+and at r≈0.3–0.5 it does not. So wastewater can raise or lower confidence in an
+ED-derived signal, and it breaks ties when ED derivatives sit on the
+quantisation floor, but it **never moves the staffing multiplier**. The
+Wastewater tab recomputes this whole lead/lag curve at render time, so the claim
+stays honest as the record grows.
+
+Its real value: concentration is continuous, so it still resolves direction in
+the summer trough where the 0.1pp-rounded ED series cannot.
+
 **`f3zz-zga5` has no history.** CDC overwrites it weekly. `scripts/archive_history.py`
 appends each cron run to `data/history/` so a back-series accumulates over time.
 
@@ -121,7 +141,8 @@ js/config.js          markets, palette, thresholds, documented gaps
 js/data.js            snapshot loader + live CDC fallback + freshness probe
 js/derive.js          d1/d2, percentiles, seasonal bands, forecast, staffing
 js/charts.js          Chart.js theming, sparklines, heat ramp
-js/tabs/*.js          six tabs
+js/tabs/*.js          seven tabs (exec, pathogens, historical,
+                      forecast, geo, wastewater, staffing)
 scripts/fetch_data.py CDC -> data/*.json
 scripts/archive_history.py  accumulates the snapshot-only dataset
 ```

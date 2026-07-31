@@ -265,3 +265,156 @@ export function indexToMedian(points) {
 export function lastN(points, n) {
   return points.slice(-n);
 }
+
+// ---------------------------------------------------------------------------
+// Wastewater
+//
+// Measured against this repo's own data (n~200 weeks, NY/NJ/CT):
+//   SARS-CoV-2 wastewater vs ED COVID share, LEVELS  -> r 0.72-0.83, peak lag 0/+1
+//   same, WEEK-OVER-WEEK CHANGES                     -> r 0.13-0.34
+//
+// So wastewater corroborates the LEVEL of activity well and predicts short-term
+// CHANGES poorly. It is wired in as a confirmation signal, never as something
+// that can promote a staffing tier on its own -- r=0.3 on changes does not
+// carry that weight. Its real value is that concentration is continuous, so it
+// still resolves direction when the ED series is stuck on its 0.1pp
+// quantisation floor (see indexQuantum).
+// ---------------------------------------------------------------------------
+
+/** Log week-over-week change: scale-free and symmetric, the right form for
+ *  comparing growth rates across series with different units. */
+export function logChange(points) {
+  const out = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1].v;
+    const b = points[i].v;
+    out.push({ t: points[i].t, v: a > 0 && b > 0 ? Math.log(b / a) : null });
+  }
+  return out;
+}
+
+/** Shift a series forward by `weeks`, keyed on ISO date strings. */
+export function shiftWeeks(points, weeks) {
+  return points.map((p) => {
+    const d = new Date(p.t + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + weeks * 7);
+    return { t: d.toISOString().slice(0, 10), v: p.v };
+  });
+}
+
+/**
+ * Cross-correlate two series across a range of lags.
+ * Positive lag = `a` leads `b` by that many weeks.
+ * Returns every lag plus the peak, so the UI can show the whole curve rather
+ * than a single cherry-picked number.
+ */
+export function crossCorrelate(a, b, { from = -3, to = 6, minN = 12 } = {}) {
+  const scan = [];
+  for (let lag = from; lag <= to; lag++) {
+    const shifted = shiftWeeks(a, lag).filter((p) => p.v !== null);
+    const { r, n } = correlate(shifted, b.filter((p) => p.v !== null));
+    scan.push({ lag, r, n });
+  }
+  const valid = scan.filter((s) => s.r !== null && s.n >= minN);
+  const peak = valid.length
+    ? valid.reduce((best, s) => (s.r > best.r ? s : best))
+    : null;
+  return { scan, peak };
+}
+
+/** Centred moving average -- damps single-plant noise in the weekly aggregate. */
+export function smooth(points, window = 3) {
+  const half = Math.floor(window / 2);
+  return points.map((p, i) => {
+    const slice = points.slice(Math.max(0, i - half), i + half + 1)
+      .map((q) => q.v).filter((v) => v !== null && !Number.isNaN(v));
+    return { t: p.t, v: slice.length ? slice.reduce((x, y) => x + y, 0) / slice.length : null };
+  });
+}
+
+/**
+ * Wastewater verdict for one state.
+ * Level percentile against its own history (cross-state absolute comparison is
+ * meaningless -- different labs, methods, site mixes), plus a smoothed
+ * direction. Returns null when there is not enough signal to say anything.
+ */
+export function wastewaterSignal(points, { smoothWindow = 3 } = {}) {
+  const clean = points.filter((p) => p.v !== null && p.v > 0);
+  if (clean.length < 12) return null;
+  const sm = smooth(clean, smoothWindow);
+  const cur = sm.at(-1);
+  const pct = percentileRank(sm, cur.v);
+
+  // Direction over 3 weeks rather than 1: single-week wastewater moves are
+  // dominated by which plants happened to report.
+  const back = sm.at(-4) ?? sm.at(0);
+  const trend = back && back.v > 0 ? Math.log(cur.v / back.v) : null;
+  const dir = trend === null ? 'flat'
+    : trend > 0.18 ? 'rising'
+    : trend < -0.18 ? 'falling'
+    : 'flat';
+
+  return {
+    value: cur.v,
+    pct,
+    trend,
+    trendPct: trend === null ? null : (Math.exp(trend) - 1) * 100,
+    dir,
+    n: clean.length,
+    t: cur.t,
+    elevated: pct !== null && pct >= 75,
+  };
+}
+
+/**
+ * Combine the ED-derived staffing read with the wastewater read.
+ * Deliberately advisory: it can raise or lower CONFIDENCE, and it can break a
+ * tie when ED derivatives are suppressed at the resolution floor, but it never
+ * changes the multiplier.
+ */
+export function corroborate(alert, wwSignals) {
+  const live = Object.entries(wwSignals).filter(([, s]) => s);
+  if (!live.length) return { verdict: 'NO DATA', cls: 'ok', detail: 'no wastewater signal available' };
+
+  const rising = live.filter(([, s]) => s.dir === 'rising').length;
+  const falling = live.filter(([, s]) => s.dir === 'falling').length;
+  const elevated = live.filter(([, s]) => s.elevated).length;
+  const edRising = !alert.noisy && alert.d1 !== null && alert.d1 > 0;
+  const edFalling = !alert.noisy && alert.d1 !== null && alert.d1 < 0;
+
+  const names = (f) => live.filter(f).map(([k]) => k).join('/');
+
+  // The case this exists for: ED derivatives are quantisation noise, so
+  // wastewater is the only series that can still resolve direction.
+  if (alert.noisy) {
+    if (rising >= 2) {
+      return { verdict: 'WATCH — WW RISING', cls: 'watch',
+        detail: `ED derivatives are inside the reporting resolution and cannot show direction. Wastewater is rising in ${names(([, s]) => s.dir === 'rising')} — the only usable directional signal right now.` };
+    }
+    if (elevated >= 2) {
+      return { verdict: 'ELEVATED BASELINE', cls: 'watch',
+        detail: `ED derivatives suppressed as noise, but wastewater sits above its 75th percentile in ${names(([, s]) => s.elevated)}.` };
+    }
+    return { verdict: 'QUIET', cls: 'ok',
+      detail: 'ED derivatives are at the resolution floor and wastewater is flat or low. Nothing moving.' };
+  }
+
+  if (edRising && rising >= 2) {
+    return { verdict: 'CONFIRMED', cls: 'elevated',
+      detail: `ED visits and wastewater are both climbing (${names(([, s]) => s.dir === 'rising')}). Two independent measurement systems agree — treat the rise as real.` };
+  }
+  if (edRising && falling >= 2) {
+    return { verdict: 'DIVERGENT', cls: 'watch',
+      detail: `ED visits are climbing while wastewater falls in ${names(([, s]) => s.dir === 'falling')}. Care-seeking or testing behaviour may be driving visits rather than transmission.` };
+  }
+  if (edFalling && rising >= 2) {
+    return { verdict: 'DIVERGENT — WW LEADS', cls: 'watch',
+      detail: `ED visits are falling but wastewater is rising in ${names(([, s]) => s.dir === 'rising')}. Wastewater led ED by about a week in this record; the decline may not hold.` };
+  }
+  if (edFalling && falling >= 2) {
+    return { verdict: 'CONFIRMED DECLINE', cls: 'ok',
+      detail: 'ED visits and wastewater are falling together. The decline is corroborated.' };
+  }
+  return { verdict: 'MIXED', cls: 'ok',
+    detail: 'No clear agreement between ED visits and wastewater this week.' };
+}
