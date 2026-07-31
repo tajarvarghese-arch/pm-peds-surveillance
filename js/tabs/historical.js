@@ -64,6 +64,9 @@ function heatmap(points) {
   const max = Math.max(...all);
   const min = Math.min(...all);
 
+  // minmax(0, 1fr) not 1fr -- a bare 1fr keeps an automatic min-content floor,
+  // so the track refuses to shrink and the grid overflows its panel.
+  const cols = 'grid-template-columns:repeat(52,minmax(0,1fr));gap:1px';
   const rows = seasons.map((s) => {
     const m = bySeason.get(s);
     const cells = axis.map((w) => {
@@ -73,15 +76,19 @@ function heatmap(points) {
       return `<div class="heat-cell" style="background:${heatColor(t)}" title="${title}"></div>`;
     }).join('');
     return `<div class="heat-row-label">${s}</div>
-            <div style="display:grid;grid-template-columns:repeat(52,1fr);gap:1px">${cells}</div>`;
+            <div style="display:grid;${cols}">${cells}</div>`;
   }).join('');
 
   const monthTicks = ['Jul', 'Sep', 'Nov', 'Jan', 'Mar', 'May'];
-  return `<div style="display:grid;grid-template-columns:60px 1fr;gap:1px 0;align-items:center">${rows}</div>
-    <div style="display:grid;grid-template-columns:60px 1fr;margin-top:4px">
-      <div></div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:#4b5a6b">
-        ${monthTicks.map((m) => `<span>${m}</span>`).join('')}
+  return `<div class="scroll-x">
+      <div>
+        <div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:1px 0;align-items:center">${rows}</div>
+        <div style="display:grid;grid-template-columns:52px minmax(0,1fr);margin-top:4px">
+          <div></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#4b5a6b">
+            ${monthTicks.map((m) => `<span>${m}</span>`).join('')}
+          </div>
+        </div>
       </div>
     </div>
     <div class="note">Scale ${min.toFixed(2)}% → ${max.toFixed(2)}%. Week-of-season axis runs w27→w26.

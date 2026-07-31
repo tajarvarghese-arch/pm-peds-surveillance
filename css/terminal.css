@@ -157,7 +157,9 @@ main { padding: 14px 16px 60px; }
   font-size: 10px;
   text-align: right;
 }
-.panel-body { padding: 10px; }
+/* Data-dense tables are wider than a phone. Let each panel scroll its own
+   overflow rather than letting a table burst the panel or the page. */
+.panel-body { padding: 10px; overflow-x: auto; }
 .panel-body.tight { padding: 0; }
 
 /* ---------- stat tiles ---------- */
@@ -194,7 +196,9 @@ main { padding: 14px 16px 60px; }
 
 /* ---------- tables ---------- */
 
-table.dt { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+/* Fill the panel when there is room, but never compress a numeric column into
+   illegibility -- past that point the panel scrolls instead. */
+table.dt { width: 100%; min-width: max-content; border-collapse: collapse; font-size: 11.5px; }
 table.dt th {
   text-align: right; font-weight: 600; color: var(--fg-dim);
   font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -205,7 +209,7 @@ table.dt th:first-child, table.dt td:first-child { text-align: left; }
 table.dt td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; }
 table.dt tbody tr:hover { background: var(--panel-2); }
 table.dt td.num { font-variant-numeric: tabular-nums; }
-.scroll-y { max-height: 340px; overflow-y: auto; }
+.scroll-y { max-height: 340px; overflow-y: auto; overflow-x: auto; }
 
 /* ---------- charts ---------- */
 
@@ -215,11 +219,25 @@ table.dt td.num { font-variant-numeric: tabular-nums; }
 
 /* ---------- heatmap ---------- */
 
+/* Wide content scrolls inside its own box; the page body never scrolls
+   sideways. Applies to the heatmap and to any table too wide for a phone. */
+.scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.scroll-x > * { min-width: 620px; }
+
 .heat { display: grid; gap: 1px; font-size: 0; }
-.heat-cell { aspect-ratio: 1 / 1; min-height: 9px; }
+/* Fixed height, never aspect-ratio: an aspect-ratio cell inherits a MINIMUM
+   WIDTH from its min-height, which floors 52 columns at ~520px and bursts the
+   panel on any narrow viewport. Height is set directly so columns stay free to
+   shrink, and .scroll-x supplies the readable floor instead. */
+.heat-cell { height: 15px; }
 .heat-row-label {
   font-size: 10px; color: var(--fg-dim); padding-right: 6px;
   display: flex; align-items: center; justify-content: flex-end;
+  white-space: nowrap;
 }
 
 /* ---------- controls ---------- */
