@@ -1,0 +1,39 @@
+{
+ "generated_at": "2026-07-31T00:08:29+00:00",
+ "markets": {
+  "states": [
+   "New York",
+   "New Jersey",
+   "Connecticut"
+  ],
+  "hhs_regions": [
+   "National",
+   "Region 1",
+   "Region 2"
+  ]
+ },
+ "sources": {
+  "ww_covid": {
+   "source": "CDC NWSS Wastewater -- SARS-CoV-2",
+   "dataset": "j9g8-acpt",
+   "geography": "NY / NJ / CT",
+   "cadence": "weekly (aggregated from per-sample)",
+   "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
+   "rows": 133,
+   "ok": true,
+   "first": "2024-01-01",
+   "last": "2026-07-13"
+  },
+  "ww_flu": {
+   "source": "CDC NWSS Wastewater -- Influenza A",
+   "dataset": "ymmh-divb",
+   "geography": "NY / NJ / CT",
+   "cadence": "weekly (aggregated from per-sample)",
+   "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
+   "rows": 133,
+   "ok": true,
+   "first": "2024-01-01",
+   "last": "2026-07-13"
+  }
+ }
+}

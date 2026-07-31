@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PM PEDS // RESPIRATORY SURVEILLANCE</title>
+<meta name="description" content="Pediatric respiratory surveillance and staffing signal for PM Pediatrics markets. Public CDC data only.">
+<link rel="stylesheet" href="./css/terminal.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🫁</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-top">
+    <div class="brand">
+      <span class="caret">$</span> PM-PEDS SURVEILLANCE
+      <span class="flags">--markets=NY,NJ,CT --src=cdc-public</span><span class="cursor"></span>
+    </div>
+    <div class="masthead-meta">
+      <span id="m-snapshot">snapshot --</span>
+      <span id="m-freshness"></span>
+      <span id="m-phi" class="s-ok">NO PHI</span>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+</header>
+
+<main id="view" role="tabpanel">
+  <div class="loading">initialising // loading CDC snapshots<span class="cursor"></span></div>
+</main>
+
+<footer class="rail">
+  <span>Public CDC aggregate surveillance only. No EHR, no PHI.</span>
+  <span>Not clinical guidance. Planning heuristic for staffing.</span>
+  <span id="f-build"></span>
+</footer>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

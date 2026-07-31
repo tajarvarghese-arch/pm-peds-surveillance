@@ -1,0 +1,56 @@
+name: Refresh CDC data + deploy
+
+on:
+  schedule:
+    # 11:10 UTC daily. CDC NSSP posts Thu/Fri; a daily pull keeps the snapshot
+    # fresh and accumulates history for f3zz-zga5, which CDC overwrites in place.
+    - cron: '10 11 * * *'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'data/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch CDC snapshots
+        run: python scripts/fetch_data.py
+
+      - name: Archive activity-level snapshot
+        run: python scripts/archive_history.py
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "no data change"
+          else
+            git commit -m "data: CDC refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
