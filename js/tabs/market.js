@@ -34,8 +34,13 @@ export default function market(root, ctx) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const cl = ctx.db.closures;
+  const roster = ctx.db.places_roster;
 
   root.innerHTML = `
+    ${rosterPanel(roster)}
+
+    <div style="height:10px"></div>
+
     ${closurePanel(cl)}
 
     <div style="height:10px"></div>
@@ -103,6 +108,68 @@ export default function market(root, ctx) {
       },
     },
   });
+}
+
+/**
+ * Site census from Overture Maps. This is the layer that answers "who else is
+ * physically in my market" -- actual points on the ground, as opposed to the
+ * NPPES layer below it, which counts legal entities and undercounts sites
+ * badly.
+ */
+function rosterPanel(r) {
+  if (!r || !r.sites) {
+    return panel('Site census', 'not loaded', empty('run scripts/fetch_places.py'));
+  }
+  const t = r.totals || {};
+  const brands = Object.entries(r.by_brand || {});
+  const branded = brands.reduce((a, [, v]) => a + v.NY + v.NJ + v.CT, 0);
+
+  return `<section class="panel">
+    <h2>Site census — urgent care in NY / NJ / CT
+      <span class="sub">Overture Maps ${r.release} · free, no key</span></h2>
+    <div class="panel-body">
+      <div class="grid g4" style="margin-bottom:10px">
+        ${tile('Sites located', String(t.sites || 0), 'with name, address and coordinates')}
+        ${tile('NY', String(t.by_state?.NY || 0), 'New York')}
+        ${tile('NJ / CT', `${t.by_state?.NJ || 0} / ${t.by_state?.CT || 0}`, 'New Jersey / Connecticut')}
+        ${tile('Matched to an operator', String(branded),
+          `${brands.length} chains · ${(t.sites || 0) - branded} independent or unmatched`)}
+      </div>
+
+      <div class="scroll-y" style="max-height:300px"><table class="dt">
+        <thead><tr><th>Operator</th><th>NY</th><th>NJ</th><th>CT</th><th>Total</th></tr></thead>
+        <tbody>${brands.map(([name, v]) => {
+          const tot = v.NY + v.NJ + v.CT;
+          const me = name === 'PM Pediatrics';
+          return `<tr>
+            <td>${me ? `<strong class="s-ok">${name}</strong>` : name}</td>
+            <td class="num">${v.NY || '·'}</td>
+            <td class="num">${v.NJ || '·'}</td>
+            <td class="num">${v.CT || '·'}</td>
+            <td class="num"><strong>${tot}</strong></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+
+      <div class="note">This is the layer that answers <em>who is physically in the market</em>.
+      It finds operators the NPPES registration layer cannot see at all — AFC runs franchise sites and
+      files no distinct organisation NPIs, so it is invisible below yet shows
+      ${(r.by_brand?.['AFC Urgent Care'] ? Object.values(r.by_brand['AFC Urgent Care']).reduce((a, b) => a + b, 0) : 0)}
+      sites here.</div>
+
+      <div class="note warn">Coverage is good but not complete: ${t.by_status?.unknown || 0} of
+      ${t.sites || 0} sites carry no operating status, and CityMD appears at
+      ${(r.by_brand?.CityMD ? r.by_brand.CityMD.NY : 0)} New York sites against roughly 150 it actually
+      runs. Read the operator table as a floor on presence, not a site count.</div>
+
+      <div class="note gap"><strong>Overture cannot give you closures, and that was tested.</strong>
+      It holds 32,271 <code>permanently_closed</code> places in this bounding box — and
+      <strong>zero</strong> of them are urgent care. Diffing consecutive monthly releases fails too:
+      only 78.9% of IDs survive from one release to the next, so a naive diff manufactures roughly 550
+      false closures a month out of ID churn alone. Closures come from the Internet Archive ledger
+      below instead.</div>
+    </div>
+  </section>`;
 }
 
 /**

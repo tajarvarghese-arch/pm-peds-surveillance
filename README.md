@@ -171,6 +171,29 @@ Chain coverage is badly incomplete and the UI says so: CityMD runs ~150 NY sites
 and matches **zero**, because large groups often bill through one corporate NPI
 under a different taxonomy.
 
+### Site census — Overture Maps
+
+`scripts/fetch_places.py` pulls actual points on the ground for NY/NJ/CT from
+Overture Maps Places: free, Apache/ODbL, public S3, no key, no account. DuckDB
+reads the parquet remotely with predicate pushdown, so it stays cheap.
+
+1,438 urgent-care sites with name, address, coordinates and website. This layer
+finds operators NPPES structurally cannot — AFC runs franchise sites and files
+no distinct organisation NPIs, so it is invisible in the registration data yet
+shows 99 sites here.
+
+**Overture cannot supply closures, and that was tested rather than assumed:**
+
+- It holds 32,271 `permanently_closed` places in the NY/NJ/CT bbox and
+  **zero** are urgent care. The closure signal covers retail and restaurants,
+  not this vertical.
+- Diffing consecutive monthly releases fails too: only **78.9%** of IDs survive
+  from one release to the next, so a naive diff manufactures ~550 false
+  closures a month out of ID churn alone.
+
+Coverage is a floor, not a census: CityMD appears at 37 NY sites against
+roughly 150 it actually operates.
+
 ### Closures, reconstructed from the Internet Archive
 
 Closures are not published anywhere — but operators publish their own location

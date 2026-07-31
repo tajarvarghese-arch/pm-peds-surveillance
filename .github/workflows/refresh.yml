@@ -40,6 +40,14 @@ jobs:
       - name: Fetch CDC snapshots
         run: python scripts/fetch_data.py
 
+      - name: Build urgent-care site census (Overture Maps)
+        # Free public S3, no key. duckdb reads the parquet remotely with
+        # predicate pushdown, so this stays cheap despite the dataset size.
+        continue-on-error: true
+        run: |
+          pip install --quiet duckdb
+          python scripts/fetch_places.py
+
       - name: Fetch urgent-care market supply
         # NPPES is a free public API. Same rule as literature: a failure here
         # must not cost us the surveillance refresh.
