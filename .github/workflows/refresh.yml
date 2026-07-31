@@ -25,6 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Follow the branch tip, not the SHA the run was queued at. Without
+          # this a re-run resurrects a stale parent and its data push is
+          # rejected as non-fast-forward.
+          ref: main
+          # Rebase needs real history; the default shallow clone cannot do it.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -37,16 +44,34 @@ jobs:
         run: python scripts/archive_history.py
 
       - name: Commit refreshed data
+        # Never allowed to block the deploy. The Pages artifact is built from the
+        # working tree, which already holds fresh data whether or not the commit
+        # lands. Committing only exists to accumulate data/history/ over time.
+        continue-on-error: true
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           if git diff --staged --quiet; then
             echo "no data change"
-          else
-            git commit -m "data: CDC refresh $(date -u +%Y-%m-%d)"
-            git push
+            exit 0
           fi
+          git commit -m "data: CDC refresh $(date -u +%Y-%m-%d)"
+
+          # A re-run checks out the SHA the run was queued at, not the current
+          # tip -- so if an earlier run already pushed data, this push is
+          # rejected as non-fast-forward. Rebase onto the live branch and retry.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected; rebasing onto origin/main (attempt $attempt)"
+            git fetch origin main
+            # Regenerated data always wins -- it is derived, never hand-edited.
+            git rebase -X ours origin/main || { git rebase --abort || true; break; }
+          done
+          echo "could not push refreshed data; deploy continues with fresh working tree"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
