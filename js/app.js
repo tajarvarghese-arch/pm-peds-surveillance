@@ -42,7 +42,7 @@ const tabsEl = document.getElementById('tabs');
 async function boot() {
   const names = ['ed_age', 'ed_state', 'naat_multi', 'pos_national', 'ari_level',
                  'respnet', 'igas', 'ww_covid', 'ww_flu', 'literature',
-                 'market_supply', 'market_events'];
+                 'market_supply', 'market_events', 'closures'];
   const [mf, ...loaded] = await Promise.all([manifest(), ...names.map(snapshot)]);
   ctx.manifest = mf;
   names.forEach((n, i) => { ctx.db[n] = loaded[i]; });

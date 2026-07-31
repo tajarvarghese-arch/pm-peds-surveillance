@@ -33,7 +33,13 @@ export default function market(root, ctx) {
     .filter((e) => e.operator && !e.operator.startsWith('EXAMPLE'))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  const cl = ctx.db.closures;
+
   root.innerHTML = `
+    ${closurePanel(cl)}
+
+    <div style="height:10px"></div>
+
     ${limitations(ms)}
 
     <div style="height:10px"></div>
@@ -97,6 +103,91 @@ export default function market(root, ctx) {
       },
     },
   });
+}
+
+/**
+ * The closure ledger. This is the only place in the dashboard that reports
+ * something no registry publishes, so the evidence travels with every row:
+ * when the page was first and last archived, what the live URL does today, and
+ * a link straight into the Wayback capture so any row can be checked by hand.
+ */
+function closurePanel(cl) {
+  if (!cl || !cl.operators) {
+    return panel('Closure ledger', 'not loaded',
+      empty('run scripts/fetch_closures.py'));
+  }
+  const events = cl.operators.flatMap((o) => o.events || []);
+  const closed = events.filter((e) => e.verdict === 'closed');
+  const inMarket = closed.filter((e) => e.in_market);
+  const consolidated = events.filter((e) => e.verdict === 'consolidated');
+  const tracked = cl.operators.filter((o) => !o.error && o.roster);
+
+  const openings = cl.operators.flatMap((o) => o.openings || [])
+    .filter((o) => o.in_market && o.first_seen);
+  const byYear = {};
+  for (const o of openings) byYear[o.first_seen.slice(0, 4)] = (byYear[o.first_seen.slice(0, 4)] || 0) + 1;
+
+  const row = (e) => `<tr>
+    <td><strong>${e.state || '·'}</strong></td>
+    <td style="text-align:left">${e.operator}</td>
+    <td style="text-align:left">${e.slug.split('/').pop()}
+      <div style="color:#4b5a6b;font-size:10px">${e.why}</div></td>
+    <td class="num" style="color:#7f8ea0">${e.first_seen}</td>
+    <td class="num" style="color:#7f8ea0">${e.last_seen}</td>
+    <td style="text-align:left"><a href="${e.wayback}" target="_blank" rel="noopener">archive</a></td>
+  </tr>`;
+
+  return `<section class="panel" style="border-color:#22d3ee">
+    <h2 style="color:#22d3ee">Closure ledger — reconstructed from the Internet Archive
+      <span class="sub">${tracked.length} operators tracked · verified ${cl.fetched_at ? cl.fetched_at.slice(0, 10) : '--'}</span></h2>
+    <div class="panel-body">
+      <div class="grid g4" style="margin-bottom:10px">
+        ${tile('Closures in market', `<span class="s-critical">${inMarket.length}</span>`,
+          'NY / NJ / CT, each verified live')}
+        ${tile('Closures all markets', String(closed.length), 'includes out-of-footprint sites')}
+        ${tile('Consolidations', String(consolidated.length),
+          'redirected into another site — not closures')}
+        ${tile('Operators tracked', String(tracked.length),
+          `${tracked.reduce((a, o) => a + (o.roster || 0), 0)} live locations`)}
+      </div>
+
+      ${inMarket.length ? `<table class="dt">
+        <thead><tr><th>St</th><th style="text-align:left">Operator</th><th style="text-align:left">Site</th>
+          <th>First archived</th><th>Last archived</th><th style="text-align:left">Evidence</th></tr></thead>
+        <tbody>${inMarket.map(row).join('')}</tbody>
+      </table>` : empty('no in-market closures detected')}
+
+      <div class="note warn">
+        <strong>How each row was established.</strong> Every location page the operator has ever
+        published is recovered from the Wayback CDX index, diffed against their live sitemap, and then
+        <em>the surviving candidate is fetched live</em>. Only a 404, or a redirect to the location
+        finder, is called a closure. A redirect to a different site is a consolidation and a redirect
+        to the same site is a slug rename — both are excluded. That last step is what separates a real
+        closure from a website redesign, and it removed
+        ${events.length - closed.length} of ${events.length} candidates here.
+      </div>
+
+      <div class="note gap">
+        <strong>last archived is not the closing date.</strong> It is the last time the crawler
+        happened to capture the page, so the true closure falls somewhere after it — sometimes a year
+        after. Treat these as "closed by roughly this date", never as a filing.
+        ${closed.some((e) => e.slug.includes('summit-health'))
+          ? ' Several CityMD New Jersey rows carry "summit-health-hub" slugs; CityMD and Summit Health merged, so those may be rebrands rather than closed doors — worth a manual check before acting on them.'
+          : ''}
+      </div>
+
+      ${Object.keys(byYear).length ? `<div class="note">
+        <strong>Openings.</strong> ${openings.length} in-market locations have a first archive capture,
+        by year: ${Object.entries(byYear).sort().map(([y, n]) => `${y}:${n}`).join(' · ')}.
+        A first capture is an <em>upper bound</em> on the opening date — the page can only be archived
+        after it exists, and often well after.
+      </div>` : ''}
+
+      <div class="note">Tracked: ${cl.operators.map((o) => `${o.name}${o.error ? ' <span class="s-watch">(no roster)</span>' : ''}`).join(' · ')}.
+      Operators without a public location sitemap cannot be tracked this way — AFC runs franchise sites
+      and publishes only blog pages nationally, and several regional groups publish no sitemap at all.</div>
+    </div>
+  </section>`;
 }
 
 function limitations(ms) {

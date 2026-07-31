@@ -171,6 +171,35 @@ Chain coverage is badly incomplete and the UI says so: CityMD runs ~150 NY sites
 and matches **zero**, because large groups often bill through one corporate NPI
 under a different taxonomy.
 
+### Closures, reconstructed from the Internet Archive
+
+Closures are not published anywhere — but operators publish their own location
+lists, and the Wayback Machine has archived those lists for a decade.
+`scripts/fetch_closures.py` recovers every `/location/<slug>` URL an operator
+has ever served, diffs it against their live sitemap, then **fetches each
+surviving candidate live** and classifies by what actually happens:
+
+| Live response | Verdict |
+|---|---|
+| 404 | **closed** |
+| redirect to the location finder | **closed**, delisted |
+| redirect to a *different* site | consolidated — not a closure |
+| redirect to the *same* site | slug rename — not a closure |
+| 200 at the original URL | still open, sitemap omission |
+
+That last step is the whole method. Absence from a sitemap proves nothing: a
+rebrand, a CMS migration or a slug rename all produce absences. Live
+verification removed 53 of 65 candidates.
+
+Tracked operators are those publishing a location sitemap: PM Pediatrics,
+CityMD, GoHealth (Northwell NY / Hartford CT), Atlantic Health. AFC runs
+franchise sites and publishes only blog pages nationally; several regional
+groups publish no sitemap at all, so they cannot be tracked this way.
+
+**`last_seen` is not the closing date** — it is the last archive capture, so the
+true closure falls somewhere after it. `first_seen` is an upper bound on
+opening, since a page can only be archived after it exists.
+
 `data/market_events.json` is a **hand-maintained ledger** for openings and
 closures you learn about from press releases, local press or site visits. No
 script writes it and the nightly refresh never touches it.

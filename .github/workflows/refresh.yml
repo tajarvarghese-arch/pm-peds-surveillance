@@ -46,6 +46,12 @@ jobs:
         continue-on-error: true
         run: python scripts/fetch_market.py
 
+      - name: Rebuild closure ledger from the Internet Archive
+        # Wayback CDX + live verification. Slow and network-bound; never allowed
+        # to block the surveillance refresh.
+        continue-on-error: true
+        run: python scripts/fetch_closures.py
+
       - name: Fetch supporting literature
         # Europe PMC is a free public API with no key. A failure here must not
         # cost us the surveillance refresh, which is the actual product.
