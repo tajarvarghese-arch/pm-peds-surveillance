@@ -47,10 +47,19 @@ jobs:
         run: python scripts/fetch_market.py
 
       - name: Rebuild closure ledger from the Internet Archive
-        # Wayback CDX + live verification. Slow and network-bound; never allowed
-        # to block the surveillance refresh.
+        # Sundays, pushes and manual runs only. This step makes dozens of live
+        # requests to operators' own websites plus the Wayback CDX index, and
+        # market structure moves on a scale of months -- hitting third-party
+        # sites every night would be rude and would buy nothing. Never allowed
+        # to block the surveillance refresh either way.
         continue-on-error: true
-        run: python scripts/fetch_closures.py
+        run: |
+          DOW=$(date -u +%u)   # 7 = Sunday
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$DOW" != "7" ]; then
+            echo "scheduled run on day $DOW — keeping the existing ledger"
+            exit 0
+          fi
+          python scripts/fetch_closures.py
 
       - name: Fetch supporting literature
         # Europe PMC is a free public API with no key. A failure here must not
