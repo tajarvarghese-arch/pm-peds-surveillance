@@ -242,10 +242,10 @@ function topicList(topics, active) {
           ${t.hitCount ? `${t.hitCount.toLocaleString()} papers · showing ${items.length}` : 'none found'}
         </span>
       </div>
-      <div id="items-${t.id}" style="${isActive ? '' : 'display:none'}">
+      <div id="items-${t.id}" style="overflow-x:auto;${isActive ? '' : 'display:none'}">
         ${items.length ? `<table class="dt">
           <tbody>${items.map((i) => `<tr>
-            <td style="max-width:520px">
+            <td style="max-width:min(520px, 68vw)">
               <a href="${i.link}" target="_blank" rel="noopener">${i.title}</a>
               <div style="color:#4b5a6b;font-size:10px;margin-top:2px">
                 ${i.journal || '--'}${i.open ? ' <span class="s-ok">· open access</span>' : ''}

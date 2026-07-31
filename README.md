@@ -137,6 +137,44 @@ Nothing in this section is summarised into a claim. It offers candidate
 explanations with citations attached and leaves the judgement to the reader. A
 dashboard that explains its own data has stopped measuring it.
 
+## The Market Supply tab — read this before quoting it
+
+**There is no public dataset of urgent care openings and closures.** Checked,
+not assumed:
+
+| Source | Openings | Closures | Covers urgent care? |
+|---|---|---|---|
+| CMS NPPES | registration date — **entity, not site** | not exposed by the API | yes, self-reported taxonomy |
+| NY `vn5v-hh5r` facilities | has `fac_opn_dat` | **no close date; active-only file** | **no urgent care type** |
+| NY `h343-jwie` CON | establishment filings | **no closure category** | **0 of 400 D&TC records since 2023** |
+| NJ / CT portals | nothing published | nothing published | — |
+
+Most freestanding urgent care operates as a physician practice, outside the
+facility-licensure regimes that would record an opening or a closing. Nobody is
+obliged to publish a closure, and closed sites keep live NPIs for years.
+
+So the tab measures **organisation NPI registrations carrying the urgent-care
+taxonomy** — a proxy for market *entry*, and no signal at all for *exit*.
+PM Pediatrics shows 13 New York entities against roughly thirty New York
+locations; that ratio is the honest scale of the gap.
+
+Two traps found while building it, both fixed:
+
+- **`state=NY` matches the mailing address**, so every entity whose corporate
+  mail goes to New Hyde Park counted as New York — including
+  "PM PEDIATRICS OF FLORIDA, LLC" in Plantation FL. `address_purpose=LOCATION`
+  is required. Uncorrected, NY was inflated 26% (722 → 571).
+- **Individual NPIs must be filtered out.** An urgent-care taxonomy on an
+  individual NPI is a clinician, not a place of business.
+
+Chain coverage is badly incomplete and the UI says so: CityMD runs ~150 NY sites
+and matches **zero**, because large groups often bill through one corporate NPI
+under a different taxonomy.
+
+`data/market_events.json` is a **hand-maintained ledger** for openings and
+closures you learn about from press releases, local press or site visits. No
+script writes it and the nightly refresh never touches it.
+
 ## The one assumption
 
 `VISIT_MIX` in `js/config.js` — estimated PM Pediatrics urgent-care visit share

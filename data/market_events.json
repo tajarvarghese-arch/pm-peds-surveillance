@@ -1,0 +1,27 @@
+{
+  "_README": [
+    "MANUAL LEDGER. This file is maintained by hand, not by any script.",
+    "No public dataset records urgent care openings and closures, so anything",
+    "you learn from a press release, a local paper, a site visit or a broker",
+    "goes here and the dashboard renders it alongside the NPPES proxy.",
+    "",
+    "Nothing here is fetched or verified automatically. Each entry should carry",
+    "a source you can go back to.",
+    "",
+    "type:   open | close | relocate | acquire",
+    "date:   YYYY-MM-DD, best known; use the month start if only month is known",
+    "conf:   confirmed | reported | rumoured"
+  ],
+  "events": [
+    {
+      "date": "2026-01-01",
+      "type": "open",
+      "operator": "EXAMPLE — delete this entry",
+      "site": "123 Example Ave, Somewhere NY",
+      "state": "NY",
+      "conf": "confirmed",
+      "source": "https://example.com/press-release",
+      "note": "Template row showing the expected shape. The dashboard skips any entry whose operator starts with EXAMPLE."
+    }
+  ]
+}
