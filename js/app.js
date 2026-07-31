@@ -10,6 +10,7 @@ import historicalTab from './tabs/historical.js';
 import forecastTab from './tabs/forecast.js';
 import geoTab from './tabs/geo.js';
 import wastewaterTab from './tabs/wastewater.js';
+import explainTab from './tabs/explain.js';
 import staffingTab from './tabs/staffing.js';
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'forecast', label: 'Forecast & d1/d2', mod: forecastTab },
   { id: 'geo', label: 'Geography', mod: geoTab },
   { id: 'wastewater', label: 'Wastewater', mod: wastewaterTab },
+  { id: 'explain', label: 'Why', mod: explainTab },
   { id: 'staffing', label: 'Staffing', mod: staffingTab },
 ];
 
@@ -37,7 +39,7 @@ const tabsEl = document.getElementById('tabs');
 
 async function boot() {
   const names = ['ed_age', 'ed_state', 'naat_multi', 'pos_national', 'ari_level',
-                 'respnet', 'igas', 'ww_covid', 'ww_flu'];
+                 'respnet', 'igas', 'ww_covid', 'ww_flu', 'literature'];
   const [mf, ...loaded] = await Promise.all([manifest(), ...names.map(snapshot)]);
   ctx.manifest = mf;
   names.forEach((n, i) => { ctx.db[n] = loaded[i]; });

@@ -256,7 +256,8 @@ function topographyPanel(ppi) {
       ${tile('season to date', `${dev.mean > 0 ? '+' : ''}${dev.mean.toFixed(0)}%`,
         `mean across ${dev.rows.length} overlapping week${dev.rows.length === 1 ? '' : 's'}`, devCls)}
       ${tile('gap direction', dev.widening
-        ? '<span class="s-ok">WIDENING</span>' : '<span class="s-watch">NARROWING</span>',
+        ? '<span class="s-ok" style="font-size:17px">WIDENING</span>'
+        : '<span class="s-watch" style="font-size:17px">NARROWING</span>',
         dev.widening ? 'running further below prior years each week'
                      : 'converging toward prior years', '')}
     </div>`;

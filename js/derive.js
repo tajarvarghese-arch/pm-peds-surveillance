@@ -267,6 +267,98 @@ export function lastN(points, n) {
 }
 
 // ---------------------------------------------------------------------------
+// Hypothesis testing against our own record
+// ---------------------------------------------------------------------------
+
+/** Spearman rank correlation. Rank-based, so it survives the small n and the
+ *  non-normal shape of seasonal burden far better than Pearson. */
+export function spearman(xs, ys) {
+  const n = xs.length;
+  if (n < 3 || ys.length !== n) return { rho: null, n };
+  const rank = (arr) => {
+    const idx = arr.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+    const r = new Array(arr.length);
+    let i = 0;
+    while (i < idx.length) {
+      let j = i;
+      while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+      const avg = (i + j) / 2 + 1; // average rank for ties
+      for (let k = i; k <= j; k++) r[idx[k][1]] = avg;
+      i = j + 1;
+    }
+    return r;
+  };
+  const rx = rank(xs), ry = rank(ys);
+  const mx = rx.reduce((a, b) => a + b, 0) / n;
+  const my = ry.reduce((a, b) => a + b, 0) / n;
+  let num = 0, dx = 0, dy = 0;
+  for (let i = 0; i < n; i++) {
+    const a = rx[i] - mx, b = ry[i] - my;
+    num += a * b; dx += a * a; dy += b * b;
+  }
+  const den = Math.sqrt(dx * dy);
+  return { rho: den === 0 ? null : num / den, n };
+}
+
+/** Per-season burden summary: peak, cumulative, and early-season level. */
+export function seasonBurden(points, earlyWeeks = [27, 28, 29, 30]) {
+  const bySeason = new Map();
+  for (const p of points) {
+    const s = seasonOf(p.t);
+    if (!bySeason.has(s)) bySeason.set(s, new Map());
+    bySeason.get(s).set(isoWeek(p.t), p.v);
+  }
+  const out = [];
+  for (const [key, weeks] of [...bySeason.entries()].sort()) {
+    const vals = [...weeks.values()];
+    const early = earlyWeeks.map((w) => weeks.get(w)).filter((v) => v != null);
+    out.push({
+      key,
+      n: vals.length,
+      peak: Math.max(...vals),
+      cumulative: vals.reduce((a, b) => a + b, 0),
+      early: early.length ? early.reduce((a, b) => a + b, 0) / early.length : null,
+      earlyN: early.length,
+      complete: vals.length >= 50,
+    });
+  }
+  return out;
+}
+
+/**
+ * Immunity-wall check: does a heavier prior season precede a softer start to
+ * the next one?
+ *
+ * This is DESCRIPTIVE. With a handful of consecutive seasons it cannot separate
+ * an immunity effect from a secular post-pandemic trend, changing test and
+ * care-seeking behaviour, or the arrival of RSV prophylaxis. It is offered as a
+ * check on a hypothesis, not as evidence for it, and the UI says so.
+ */
+export function immunityWallCheck(points, { minPriorWeeks = 30 } = {}) {
+  const seasons = seasonBurden(points);
+  const pairs = [];
+  for (let i = 1; i < seasons.length; i++) {
+    const prior = seasons[i - 1];
+    const next = seasons[i];
+    if (prior.n < minPriorWeeks || next.early === null) continue;
+    pairs.push({
+      prior: prior.key, next: next.key,
+      priorPeak: prior.peak, priorCumulative: prior.cumulative,
+      priorComplete: prior.complete,
+      nextEarly: next.early, nextEarlyN: next.earlyN,
+    });
+  }
+  if (pairs.length < 3) return { pairs, peak: { rho: null, n: pairs.length },
+                                 cumulative: { rho: null, n: pairs.length }, seasons };
+  return {
+    pairs,
+    seasons,
+    peak: spearman(pairs.map((p) => p.priorPeak), pairs.map((p) => p.nextEarly)),
+    cumulative: spearman(pairs.map((p) => p.priorCumulative), pairs.map((p) => p.nextEarly)),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Wastewater
 //
 // Measured against this repo's own data (n~200 weeks, NY/NJ/CT):

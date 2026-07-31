@@ -110,6 +110,33 @@ appends each cron run to `data/history/` so a back-series accumulates over time.
 
 ---
 
+## The "Why" tab
+
+Two halves, deliberately kept apart.
+
+**What can be tested here.** The immunity-wall check runs against this
+dashboard's own record: for each season transition, prior-season burden against
+the next season's early level. It reports Spearman ρ with its n and never
+dresses the result up as inference.
+
+As of writing it returns a genuinely awkward result — prior-season *peak* ranks
+perfectly against the next season's start (ρ=−1.00, every heavier season
+followed by a softer one), while *cumulative* burden shows nothing (ρ=0.00). If
+population immunity were the mechanism, total exposure should matter at least as
+much as peak sharpness. The tab flags this disagreement rather than quoting the
+stronger number, and notes that at n=4 a perfect ordering arises by chance in 1
+of 24 permutations.
+
+**What other people have published.** Real, cited, linked items from the
+Europe PMC REST API (`scripts/fetch_literature.py`) — no key, CORS-open,
+relevance-sorted and restricted to titles and abstracts. Topics map to signals
+the dashboard can observe, and whichever signals are currently firing get
+surfaced first.
+
+Nothing in this section is summarised into a claim. It offers candidate
+explanations with citations attached and leaves the judgement to the reader. A
+dashboard that explains its own data has stopped measuring it.
+
 ## The one assumption
 
 `VISIT_MIX` in `js/config.js` — estimated PM Pediatrics urgent-care visit share
@@ -141,8 +168,8 @@ js/config.js          markets, palette, thresholds, documented gaps
 js/data.js            snapshot loader + live CDC fallback + freshness probe
 js/derive.js          d1/d2, percentiles, seasonal bands, forecast, staffing
 js/charts.js          Chart.js theming, sparklines, heat ramp
-js/tabs/*.js          seven tabs (exec, pathogens, historical,
-                      forecast, geo, wastewater, staffing)
+js/tabs/*.js          eight tabs (exec, pathogens, historical, forecast,
+                      geo, wastewater, why, staffing)
 scripts/fetch_data.py CDC -> data/*.json
 scripts/archive_history.py  accumulates the snapshot-only dataset
 ```

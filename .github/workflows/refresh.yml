@@ -40,6 +40,12 @@ jobs:
       - name: Fetch CDC snapshots
         run: python scripts/fetch_data.py
 
+      - name: Fetch supporting literature
+        # Europe PMC is a free public API with no key. A failure here must not
+        # cost us the surveillance refresh, which is the actual product.
+        continue-on-error: true
+        run: python scripts/fetch_literature.py
+
       - name: Archive activity-level snapshot
         run: python scripts/archive_history.py
 
