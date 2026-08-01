@@ -237,6 +237,29 @@ distribution is the single highest-value improvement to this tool.
 
 ---
 
+## If nobody touches the repo
+
+GitHub disables scheduled workflows in a public repo after **60 days with no
+repository activity**, and commits made by `GITHUB_TOKEN` do not reliably reset
+that timer — the exact trap a self-committing data pipeline falls into. Site
+traffic is not repository activity, so a dashboard being read daily can still
+have a dead refresh job.
+
+Two defences, because the failure mode is silent:
+
+1. **`.github/workflows/keepalive.yml`** runs on the 1st and 15th of each month.
+   It calls the Actions API to re-enable `refresh.yml` and stamps
+   `.github/last-alive` with a real commit.
+2. **The site checks CDC itself.** On every page load the browser queries
+   `vjzj-u7u8` directly (CORS is open) and compares against the committed
+   snapshot. If the build is more than 10 days old, or CDC is 14+ days ahead, a
+   banner appears above the tabs; past 45 days it escalates to red. So even with
+   every workflow dead, the page tells you it is out of date instead of quietly
+   serving old numbers.
+
+Neither keepalive mechanism is documented as guaranteed, which is why the
+in-app check exists. Trust the banner, not the cron.
+
 ## Deploy
 
 Push to `main`. Enable Pages → Source: **GitHub Actions**. The workflow pulls

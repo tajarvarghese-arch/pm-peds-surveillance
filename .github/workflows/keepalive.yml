@@ -1,0 +1,59 @@
+name: Keepalive
+
+# GitHub disables scheduled workflows in a public repository after 60 days with
+# no repository activity, and commits made by GITHUB_TOKEN do not reliably reset
+# that timer -- which is exactly the trap a self-committing data pipeline falls
+# into. Left alone, the nightly refresh would quietly stop and the site would
+# serve stale numbers indefinitely.
+#
+# This runs monthly and re-arms the schedule two ways:
+#   1. an explicit API call to enable the refresh workflow, which is what
+#      actually un-sticks it once GitHub has disabled it, and
+#   2. a real commit touching .github/last-alive, so there is genuine repo
+#      activity on the clock.
+#
+# Belt and braces on purpose: neither mechanism is documented as guaranteed, and
+# the failure mode is silent. The dashboard ALSO checks CDC directly from the
+# browser on every load and shows a loud banner if the pipeline has stopped, so
+# a keepalive failure is visible rather than invisible.
+
+on:
+  schedule:
+    # 04:20 UTC on the 1st and 15th of each month.
+    - cron: '20 4 1,15 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Re-enable the refresh workflow if GitHub disabled it
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT \
+            "repos/${{ github.repository }}/actions/workflows/refresh.yml/enable" \
+            && echo "refresh.yml enabled" \
+            || echo "enable call failed or already enabled"
+
+      - name: Stamp repository activity
+        run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > .github/last-alive
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/last-alive
+          if git diff --staged --quiet; then
+            echo "nothing to stamp"
+          else
+            git commit -m "chore: keepalive stamp"
+            git push
+          fi

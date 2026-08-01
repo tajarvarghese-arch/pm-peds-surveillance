@@ -66,17 +66,70 @@ function renderMasthead() {
     `sources: ${Object.values(ctx.manifest?.sources || {}).filter((s) => s.ok).length} live CDC datasets`;
 }
 
+/**
+ * Truth-telling about freshness, independent of the pipeline.
+ *
+ * The refresh job can die without anyone noticing: GitHub disables scheduled
+ * workflows after 60 days with no repository activity, and commits made by
+ * GITHUB_TOKEN do not reliably reset that timer. A repo that only ever commits
+ * to itself can therefore go quiet while the site keeps serving whatever it
+ * last built -- and a stale dashboard that looks healthy is worse than no
+ * dashboard.
+ *
+ * So freshness is never inferred from the snapshot alone. The browser asks CDC
+ * directly on every load (their endpoints are CORS-open, so this works from
+ * GitHub Pages with no backend) and compares. If the pipeline has stopped, the
+ * page says so in a banner nobody can miss.
+ */
 async function probeFreshness() {
-  const latestLocal = ctx.db.ed_state?.data?.at(-1)?.date;
-  const remote = await freshness('ed_state', 'date');
   const box = document.getElementById('m-freshness');
-  if (!remote) { box.innerHTML = '<span style="color:#4b5a6b">live probe unavailable</span>'; return; }
-  if (latestLocal && remote > latestLocal) {
-    box.innerHTML = `<span class="s-watch">CDC has newer (${remote}) — snapshot stale</span>`;
-  } else {
-    const age = daysAgo(remote);
-    box.innerHTML = `<span class="s-ok">in sync</span> <span style="color:#4b5a6b">CDC lag ${age}d</span>`;
+  const latestLocal = ctx.db.ed_state?.data?.at(-1)?.date;
+  const builtAt = ctx.db.ed_state?.fetched_at || ctx.manifest?.generated_at;
+  const buildAge = builtAt
+    ? Math.floor((Date.now() - new Date(builtAt).getTime()) / 86400000) : null;
+
+  const remote = await freshness('ed_state', 'date');
+
+  if (!remote) {
+    box.innerHTML = '<span style="color:#4b5a6b">live probe unavailable</span>';
+    if (buildAge !== null && buildAge > 10) staleBanner({ buildAge, behind: null, remote: null });
+    return;
   }
+
+  const behind = latestLocal
+    ? Math.round((new Date(remote) - new Date(latestLocal)) / 86400000) : null;
+
+  if (behind && behind > 0) {
+    box.innerHTML = `<span class="s-watch">CDC has newer (${remote}) — snapshot ${behind}d behind</span>`;
+  } else {
+    box.innerHTML = `<span class="s-ok">in sync</span> <span style="color:#4b5a6b">CDC lag ${daysAgo(remote)}d</span>`;
+  }
+
+  // A build older than ~10 days means several scheduled runs were missed: the
+  // job is failing, or the schedule has been disabled outright.
+  if ((buildAge !== null && buildAge > 10) || (behind !== null && behind >= 14)) {
+    staleBanner({ buildAge, behind, remote });
+  }
+}
+
+function staleBanner({ buildAge, behind, remote }) {
+  if (document.getElementById('stale-banner')) return;
+  const severe = (buildAge ?? 0) > 45 || (behind ?? 0) >= 30;
+  const el = document.createElement('div');
+  el.id = 'stale-banner';
+  el.className = `stale-banner${severe ? ' severe' : ''}`;
+  el.innerHTML = `
+    <strong>${severe ? '⚠ THIS DASHBOARD IS OUT OF DATE' : '⚠ Data may be stale'}</strong>
+    <span>
+      ${buildAge !== null ? `Last successful build was <strong>${buildAge} days ago</strong>.` : ''}
+      ${behind ? ` CDC has published <strong>${behind} days</strong> of data since this snapshot${remote ? ` (through ${remote})` : ''}.` : ''}
+      The scheduled refresh has probably stopped — GitHub disables scheduled workflows after 60 days
+      with no repository activity, and the job's own commits do not reset that timer.
+    </span>
+    <span class="fix">Fix: repo → <em>Actions</em> → enable the workflow → <em>Run workflow</em>.
+    Any push also revives it.</span>`;
+  const main = document.getElementById('view');
+  main.parentNode.insertBefore(el, main);
 }
 
 function renderTabs() {
