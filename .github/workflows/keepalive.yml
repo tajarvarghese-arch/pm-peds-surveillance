@@ -34,11 +34,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          # A PAT push counts as real repository activity; a GITHUB_TOKEN push
+          # does not reliably. Falls back so this still runs without the secret.
+          token: ${{ secrets.REFRESH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Report which credential is in use
+        run: |
+          if [ -n "${{ secrets.REFRESH_PAT }}" ]; then
+            echo "REFRESH_PAT present — pushes count as repository activity"
+          else
+            echo "::warning::REFRESH_PAT not set. Falling back to GITHUB_TOKEN, whose commits do NOT reliably reset the 60-day scheduled-workflow timer. The in-app staleness banner remains the backstop."
+          fi
 
       - name: Re-enable the refresh workflow if GitHub disabled it
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.REFRESH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           gh api --method PUT \
             "repos/${{ github.repository }}/actions/workflows/refresh.yml/enable" \

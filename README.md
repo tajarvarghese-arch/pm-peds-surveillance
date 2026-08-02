@@ -257,8 +257,32 @@ Two defences, because the failure mode is silent:
    every workflow dead, the page tells you it is out of date instead of quietly
    serving old numbers.
 
-Neither keepalive mechanism is documented as guaranteed, which is why the
-in-app check exists. Trust the banner, not the cron.
+### Guaranteed uptime: `REFRESH_PAT` (optional)
+
+Both workflows check out with
+`token: ${{ secrets.REFRESH_PAT || secrets.GITHUB_TOKEN }}`. Without the secret
+they run exactly as before. With it, the daily data commit is pushed as a real
+user, which **is** repository activity — so the 60-day timer resets every single
+day and the schedule never approaches the cutoff.
+
+To enable:
+
+1. GitHub → Settings → Developer settings → Personal access tokens →
+   **Fine-grained tokens** → Generate new token
+2. Repository access: **only** `pm-peds-surveillance`
+3. Repository permissions: **Contents: Read and write** and
+   **Workflows: Read and write**. Nothing else.
+4. Set an expiry you will actually renew (12 months is the practical maximum)
+5. Copy the token, then repo → Settings → Secrets and variables → Actions →
+   New repository secret → name it `REFRESH_PAT`
+
+The token is write-scoped to one public repo containing only public CDC data, so
+the blast radius is small — but it is still a credential, so keep the expiry
+short enough that a leak ages out.
+
+**When it expires the pushes start failing silently.** That is fine by design:
+the in-app staleness banner still fires, because it asks CDC directly rather
+than trusting the pipeline. Trust the banner, not the cron.
 
 ## Deploy
 

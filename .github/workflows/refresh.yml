@@ -8,7 +8,11 @@ on:
   push:
     branches: [main]
     paths-ignore:
+      # A PAT-authored push DOES retrigger workflows (unlike GITHUB_TOKEN), so
+      # the job's own data commits and the keepalive stamp must be ignored here
+      # or every run would immediately queue another.
       - 'data/**'
+      - '.github/last-alive'
   workflow_dispatch:
 
 permissions:
@@ -32,6 +36,15 @@ jobs:
           ref: main
           # Rebase needs real history; the default shallow clone cannot do it.
           fetch-depth: 0
+          # If REFRESH_PAT is set, the daily data commit is pushed as a real
+          # user rather than as github-actions[bot]. That matters: GitHub
+          # disables scheduled workflows after 60 days with no repository
+          # activity, and GITHUB_TOKEN commits do not reliably reset that
+          # timer. Pushing daily under a PAT keeps the repo genuinely active,
+          # so the schedule never gets near the cutoff. Falls back to
+          # GITHUB_TOKEN when the secret is absent, so the workflow still runs
+          # untouched -- just without the keepalive property.
+          token: ${{ secrets.REFRESH_PAT || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
