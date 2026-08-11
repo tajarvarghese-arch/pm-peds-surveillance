@@ -197,7 +197,7 @@ function mixControls(ctx) {
     These are estimated <strong>urgent-care visit shares</strong> by age band, not population shares,
     and not PM Pediatrics' actual mix — we have no clinic-level utilisation data. If you can supply the
     real distribution the index becomes materially more accurate. Weights are normalised, so only the
-    ratios matter.</div>
+    ratios matter. <a href="#exec">See the full derivation on the Exec Summary tab</a>.</div>
   </div>`;
 }
 

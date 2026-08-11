@@ -1,7 +1,7 @@
 // Executive summary: one screen that answers "do I need more staff soon?"
 
 import { panel, tile, num, delta, levelBadge, labelsFrom, valuesFrom, empty } from '../ui.js';
-import { line, hexA, sparkline } from '../charts.js';
+import { line, bar, hexA, sparkline } from '../charts.js';
 import { PATHOGENS, PED_AGES, MARKETS } from '../config.js';
 import { pressureIndex, staffing, d1, d2, seasonalBands, isoWeek, seasonOf, percentileRank,
   indexQuantum, wastewaterSignal, corroborate, quantile } from '../derive.js';
@@ -138,6 +138,14 @@ export default function exec(root, ctx) {
     <div class="grid g5" style="margin-bottom:10px">${tiles.join('')}</div>
     <div class="note" style="margin:-4px 0 10px">${corr.detail}</div>
 
+    ${recentPanel(ppi, quantum)}
+
+    <div style="height:10px"></div>
+
+    ${methodPanel(edAge, ctx, alert, quantum)}
+
+    <div style="height:10px"></div>
+
     ${topographyPanel(ppi)}
 
     <div style="height:10px"></div>
@@ -145,7 +153,16 @@ export default function exec(root, ctx) {
     <div class="grid g-2-1" style="margin-bottom:10px">
       ${panel('Season overlay — pediatric pressure index',
         `p25–p75 band from ${seasons.length} seasons (n=${nMin}–${nMax}/wk)`,
-        `<div class="chart-wrap tall"><canvas id="c-overlay"></canvas></div>
+        `<div style="display:flex;gap:6px;margin-bottom:6px">
+           <button class="ghost" id="ov-lin" aria-pressed="${!ctx.overlayLog}">linear</button>
+           <button class="ghost" id="ov-log" aria-pressed="${!!ctx.overlayLog}">log</button>
+           <span style="margin-left:auto;color:#4b5a6b;font-size:10px;align-self:center">
+             this series spans ~35× floor to peak</span>
+         </div>
+         <div class="chart-wrap tall"><canvas id="c-overlay"></canvas></div>
+         <div class="note">A linear axis has to hold the winter peak, which flattens the summer floor
+         into a straight line. <strong>Log scale</strong> gives proportional moves equal visual weight,
+         so an off-season ramp is visible at the bottom of the range.</div>
          <div class="note warn">Bands are computed over <strong>${seasons.length} seasons</strong>, not ten.
          NSSP ED surveillance begins 2022-09-25. A p75 built on ${nMin}–${nMax} observations per week
          is a rough envelope, not a stable percentile.</div>`)}
@@ -166,6 +183,7 @@ export default function exec(root, ctx) {
   `;
 
   mountIso(ctx);
+  mountRecent(ppi, quantum);
 
   // overlay chart
   const ds = [
@@ -184,9 +202,25 @@ export default function exec(root, ctx) {
   line(document.getElementById('c-overlay'), {
     labels: axis.map((w) => `w${w}`),
     datasets: ds,
-    options: { scales: { y: { title: { display: true, text: '% ED visits',
-      color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } } },
+    options: {
+      scales: {
+        y: {
+          // Logarithmic gives proportional moves equal visual weight, which is
+          // the only way an off-season ramp near 0.6% is legible on an axis
+          // that must also hold a 23% winter peak.
+          type: ctx.overlayLog ? 'logarithmic' : 'linear',
+          title: { display: true, text: `% ED visits${ctx.overlayLog ? ' (log)' : ''}`,
+            color: '#4b5a6b', font: { family: 'monospace', size: 9 } },
+        },
+      },
+    },
   });
+
+  const setScale = (v) => { ctx.overlayLog = v; rerender(); };
+  const lin = document.getElementById('ov-lin');
+  const log = document.getElementById('ov-log');
+  if (lin) lin.onclick = () => setScale(false);
+  if (log) log.onclick = () => setScale(true);
 
   // age band chart
   const recent = edAge.slice(-78);
@@ -199,6 +233,184 @@ export default function exec(root, ctx) {
       backgroundColor: 'transparent',
     })),
   });
+}
+
+/**
+ * The season overlay is drawn on an axis that has to hold a ~23% winter peak,
+ * which renders a move from 0.65% to 0.94% as a hairline -- invisible exactly
+ * when it matters, because the interesting part of an off-season ramp is the
+ * shape near the floor.
+ *
+ * Three framings of the same weeks, none of which needs a winter-scaled axis:
+ * an auto-scaled recent window, the move expressed against the season's own
+ * floor, and the week-over-week rate.
+ */
+function recentPanel(ppi, quantum) {
+  if (ppi.length < 6) return '';
+  const N = 14;
+  const tail = ppi.slice(-N);
+  const cur = tail.at(-1).v;
+  const first = tail[0].v;
+
+  // Trough of the current season, so "off the floor" means something specific.
+  const curSeason = seasonOf(ppi.at(-1).t);
+  const thisSeason = ppi.filter((p) => seasonOf(p.t) === curSeason);
+  const floorPts = thisSeason.length >= 3 ? thisSeason : ppi.slice(-26);
+  const floor = Math.min(...floorPts.map((p) => p.v));
+  const offFloor = floor > 0 ? ((cur / floor) - 1) * 100 : null;
+
+  const f = d1(tail, quantum);
+  const rises = f.filter((p) => p.v !== null && p.v > 0 && !p.noisy).length;
+  let streak = 0;
+  for (let i = f.length - 1; i >= 0; i--) {
+    if (f[i].v !== null && f[i].v > 0) streak++; else break;
+  }
+
+  return `<section class="panel" style="border-color:${streak >= 3 ? '#f97316' : 'var(--line)'}">
+    <h2>Recent trajectory — is it actually moving?
+      <span class="sub">last ${N} weeks, axis scaled to the window</span></h2>
+    <div class="panel-body">
+      <div class="grid g4" style="margin-bottom:10px">
+        ${tile('Off the season floor', offFloor === null ? '--'
+          : `<span class="${offFloor > 25 ? 's-elevated' : ''}">${offFloor > 0 ? '+' : ''}${offFloor.toFixed(0)}%</span>`,
+          `floor was ${num(floor, 3, '%')} · now ${num(cur, 3, '%')}`)}
+        ${tile('Consecutive rises', `<span class="${streak >= 3 ? 's-elevated' : ''}">${streak}</span>`,
+          streak >= 3 ? 'a run, not a wobble' : 'weeks up in a row')}
+        ${(() => {
+          // A fixed 14-week lookback straddles the spring decline and the
+          // summer turn, so it reports -48% while the index is climbing. Four
+          // weeks sits inside the current move and answers the actual question.
+          const back = tail.length > 4 ? tail.at(-5).v : first;
+          const chg = back > 0 ? (cur / back - 1) * 100 : null;
+          return tile('Change over 4 wks',
+            chg === null ? '--'
+              : `<span class="${chg > 15 ? 's-elevated' : ''}">${chg > 0 ? '+' : ''}${chg.toFixed(0)}%</span>`,
+            `${num(back, 3, '%')} → ${num(cur, 3, '%')}`);
+        })()}
+        ${tile('Ticks per move', (quantum > 0 && f.at(-1)?.abs)
+          ? Math.abs(f.at(-1).abs / quantum).toFixed(1) : '--',
+          `1 tick = ${quantum.toFixed(3)}pp · >2 is signal`)}
+      </div>
+      <div class="grid g2">
+        <div>
+          <div class="chart-wrap short"><canvas id="c-recent"></canvas></div>
+          <div class="note">Level, on an axis that fits these weeks only.</div>
+        </div>
+        <div>
+          <div class="chart-wrap short"><canvas id="c-recent-d1"></canvas></div>
+          <div class="note">Week-over-week %. Bars inside the shaded band are within the
+          reporting resolution and mean nothing.</div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+/**
+ * What the index actually is, derived live from the current week rather than
+ * written down once and left to rot.
+ *
+ * The index is this dashboard's own construct, not a CDC metric, and it carries
+ * an assumption that materially moves every staffing number. Anyone reading a
+ * multiplier off this page is entitled to see the arithmetic that produced it
+ * without opening the source.
+ */
+function methodPanel(edAge, ctx, alert, quantum) {
+  const last = edAge.at(-1);
+  if (!last) return '';
+  const total = Object.values(ctx.mix).reduce((a, b) => a + b, 0) || 1;
+
+  const rows = PED_AGES.map((age) => {
+    const v = last[`Combined|${age}`];
+    const w = ctx.mix[age] ?? 0;
+    return { age, v, w, contrib: v == null ? null : (v * w) / total };
+  });
+  const idx = rows.reduce((a, r) => a + (r.contrib ?? 0), 0);
+  const simple = rows.filter((r) => r.v != null);
+  const mean = simple.length ? simple.reduce((a, r) => a + r.v, 0) / simple.length : null;
+
+  // Same week, one band, broken out by pathogen -- shows what "Combined" is.
+  const band = '1-4 years';
+  const parts = ['COVID-19', 'Influenza', 'RSV', 'Combined']
+    .map((p) => ({ p, v: last[`${p}|${band}`] }));
+
+  return `<section class="panel">
+    <h2>What the Pediatric Pressure Index is
+      <span class="sub">this dashboard's construct, not a CDC metric</span></h2>
+    <div class="panel-body">
+      <div style="font-size:12px;line-height:1.6;margin-bottom:10px">
+        The share of <strong>pediatric emergency department visits that are respiratory</strong>,
+        from CDC NSSP <code>7xva-uux8</code>, weighted across three age bands. It exists because the
+        metric the original plan was keyed to — CDC ILINet's outpatient ILI % — no longer publishes a
+        live feed. There is no published index of this kind to borrow, so this one is built here and
+        shown in full.
+      </div>
+
+      <div class="grid g2">
+        <div style="overflow-x:auto">
+          <table class="dt">
+            <thead><tr><th>Age band</th><th>CDC "Combined"</th><th>Weight</th><th>Contribution</th></tr></thead>
+            <tbody>
+              ${rows.map((r) => `<tr>
+                <td>${r.age}</td>
+                <td class="num">${num(r.v, 1, '%')}</td>
+                <td class="num">${r.w.toFixed(2)}</td>
+                <td class="num">${num(r.contrib, 4)}</td>
+              </tr>`).join('')}
+              <tr style="border-top:1px solid var(--line-hot)">
+                <td colspan="3"><strong>Index — week ending ${last.week}</strong></td>
+                <td class="num"><strong class="s-ok">${num(idx, 4, '%')}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="note">Weights are normalised, so only their ratios matter.
+          The same week reads ${num(mean, 2, '%')} as a plain average of the three bands, and
+          ${num(rows[0].v, 1, '%')} if you looked at infants alone — which is how much the weighting
+          choice moves the answer.</div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="dt">
+            <thead><tr><th>What "Combined" contains</th><th>${band}</th></tr></thead>
+            <tbody>${parts.map((x) => `<tr>
+              <td>${x.p === 'Combined' ? '<strong>Combined (used here)</strong>' : x.p}</td>
+              <td class="num">${num(x.v, 1, '%')}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+          <div class="note">CDC's own rollup of COVID-19, influenza and RSV. It is not every
+          respiratory pathogen — parainfluenza, hMPV, adenovirus and rhino/entero are tracked
+          separately on the Pathogens tab and are <strong>not</strong> in this index.</div>
+        </div>
+      </div>
+
+      <div class="note warn" style="margin-top:10px">
+        <span class="assumption">assumption</span>
+        <strong>The weights are estimates, and they are not PM Pediatrics' real visit mix.</strong>
+        No clinic-level utilisation data is public, so
+        &lt;1yr ${ctx.mix['<1 year']} / 1-4yr ${ctx.mix['1-4 years']} / 5-17yr ${ctx.mix['5-17 years']}
+        are an estimate of urgent-care <em>visit share</em> by age — not population share. Adjust them
+        live on the Staffing tab. Supplying the real distribution is the single highest-value
+        improvement available to this tool.
+      </div>
+
+      <div class="note gap">
+        <strong>Two more limits worth holding against it.</strong>
+        It is <strong>national</strong>: CDC publishes age bands only nationally, and the state feed
+        <code>vjzj-u7u8</code> carries no age breakout — the two are never blended, so the staffing
+        multiplier is a national pediatric signal and the market lines on the Geography tab are
+        all-ages. And it is <strong>emergency department</strong> visits, a proxy for urgent-care
+        demand rather than the same thing; the mapping from ED share to your door count is
+        unvalidated.
+      </div>
+
+      <div class="note">
+        Resolution: CDC reports to one decimal place, so one reporting tick moves this index by
+        ${quantum.toFixed(3)}pp — about ${((quantum / (alert.value || 1)) * 100).toFixed(1)}% at the
+        current level. Week-over-week changes smaller than that are rounding, not trend, and the
+        staffing engine refuses to act on them.
+      </div>
+    </div>
+  </section>`;
 }
 
 /**
@@ -309,6 +521,58 @@ function topographyPanel(ppi) {
       as large percentages.</div>` : ''}
     </div>
   </section>`;
+}
+
+function mountRecent(ppi, quantum) {
+  const host = document.getElementById('c-recent');
+  if (!host) return;
+  const N = 14;
+  const tail = ppi.slice(-N);
+  const labels = tail.map((p) => {
+    const d = new Date(p.t + 'T00:00:00Z');
+    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' });
+  });
+
+  line(host, {
+    labels,
+    datasets: [{
+      label: 'pressure index',
+      data: tail.map((p) => +p.v.toFixed(4)),
+      borderColor: '#22d3ee', borderWidth: 2.2,
+      backgroundColor: hexA('#22d3ee', 0.14), fill: true,
+      pointRadius: 2.5, pointBackgroundColor: '#22d3ee',
+    }],
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: false, title: { display: true, text: '% ED visits',
+        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } },
+    },
+  });
+
+  const dHost = document.getElementById('c-recent-d1');
+  if (!dHost) return;
+  const f = d1(tail, quantum);
+  // Shade the band where a week-over-week move is smaller than two reporting
+  // ticks, so noise is visually separated from signal rather than argued about.
+  const noiseBand = tail.map((p, i) => (i === 0 || !p.v ? null
+    : +((quantum * 2 / tail[i - 1].v) * 100).toFixed(2)));
+
+  bar(dHost, {
+    labels: labels.slice(1),
+    datasets: [
+      { label: 'WoW %', data: f.map((p) => (p.v === null ? null : +p.v.toFixed(2))),
+        backgroundColor: f.map((p) => (p.noisy ? 'rgba(127,142,160,0.45)'
+          : p.v > 0 ? 'rgba(249,115,22,0.85)' : 'rgba(74,222,128,0.85)')) },
+      { label: 'resolution floor', type: 'line', data: noiseBand.slice(1),
+        borderColor: 'rgba(251,191,36,0.55)', borderDash: [3, 3], borderWidth: 1,
+        pointRadius: 0, fill: false },
+    ],
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { title: { display: true, text: 'WoW %',
+        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } },
+    },
+  });
 }
 
 function mountIso(ctx) {
