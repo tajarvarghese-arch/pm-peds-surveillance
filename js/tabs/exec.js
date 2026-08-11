@@ -270,10 +270,33 @@ function recentPanel(ppi, quantum) {
     <h2>Recent trajectory — is it actually moving?
       <span class="sub">last ${N} weeks, axis scaled to the window</span></h2>
     <div class="panel-body">
-      <div class="grid g4" style="margin-bottom:10px">
+      <div class="grid g5" style="margin-bottom:10px">
         ${tile('Off the season floor', offFloor === null ? '--'
           : `<span class="${offFloor > 25 ? 's-elevated' : ''}">${offFloor > 0 ? '+' : ''}${offFloor.toFixed(0)}%</span>`,
           `floor was ${num(floor, 3, '%')} · now ${num(cur, 3, '%')}`)}
+        ${(() => {
+          // Same calendar week in prior years: is this level normal for August,
+          // or is the ramp itself the anomaly?
+          const byYearWeek = new Map();
+          const years = new Set();
+          for (const p of ppi) {
+            const y = +p.t.slice(0, 4);
+            byYearWeek.set(`${y}-${isoWeek(p.t)}`, p.v);
+            years.add(y);
+          }
+          const cy = +tail.at(-1).t.slice(0, 4);
+          const w = isoWeek(tail.at(-1).t);
+          const priors = [...years].filter((y) => y < cy)
+            .map((y) => byYearWeek.get(`${y}-${w}`))
+            .filter((v) => v !== undefined).sort((a, b) => a - b);
+          if (!priors.length) return tile('vs prior years', '--', 'no matching week');
+          const med = quantile(priors, 0.5);
+          const dev = med > 0 ? ((cur / med) - 1) * 100 : null;
+          const cls = dev === null ? '' : dev < -25 ? 's-ok' : dev > 25 ? 's-critical' : 's-watch';
+          return tile(`vs prior years · wk ${w}`,
+            `<span class="${cls}">${dev > 0 ? '+' : ''}${dev.toFixed(0)}%</span>`,
+            `median ${num(med, 3, '%')} across ${priors.length} yr${priors.length === 1 ? '' : 's'}`);
+        })()}
         ${tile('Consecutive rises', `<span class="${streak >= 3 ? 's-elevated' : ''}">${streak}</span>`,
           streak >= 3 ? 'a run, not a wobble' : 'weeks up in a row')}
         ${(() => {
@@ -293,8 +316,11 @@ function recentPanel(ppi, quantum) {
       </div>
       <div class="grid g2">
         <div>
-          <div class="chart-wrap short"><canvas id="c-recent"></canvas></div>
-          <div class="note">Level, on an axis that fits these weeks only.</div>
+          <div class="chart-wrap"><canvas id="c-recent"></canvas></div>
+          <div class="note">Same calendar weeks in prior years, on an axis that fits this window only.
+          Aligned by <strong>calendar week</strong>, not week of season — this lookback reaches back
+          past week 27, which belongs to the previous respiratory season, so season-alignment would
+          straddle a boundary and misalign every comparison.</div>
         </div>
         <div>
           <div class="chart-wrap short"><canvas id="c-recent-d1"></canvas></div>
@@ -533,19 +559,78 @@ function mountRecent(ppi, quantum) {
     return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' });
   });
 
+  // Prior years on the same axis, aligned by CALENDAR week rather than by week
+  // of season. Week-of-season alignment breaks here: the current window reaches
+  // back past week 27, which belongs to the previous respiratory season, so the
+  // lookback would straddle a season boundary and misalign every comparison.
+  const byYearWeek = new Map();
+  const years = new Set();
+  for (const p of ppi) {
+    const y = +p.t.slice(0, 4);
+    byYearWeek.set(`${y}-${isoWeek(p.t)}`, p.v);
+    years.add(y);
+  }
+  const curYear = +tail.at(-1).t.slice(0, 4);
+  const priorYears = [...years].filter((y) => y < curYear).sort((a, b) => b - a).slice(0, 3);
+
+  // Each window point carries its own (year, week), so a window spanning a
+  // year boundary still looks up the right prior-year cell.
+  const cells = tail.map((p) => ({ y: +p.t.slice(0, 4), w: isoWeek(p.t) }));
+  const seriesFor = (offset) => cells.map((c) => {
+    const v = byYearWeek.get(`${c.y - offset}-${c.w}`);
+    return v === undefined ? null : +v.toFixed(4);
+  });
+
+  const priorSeries = priorYears.map((y, i) => ({
+    year: y,
+    data: seriesFor(curYear - y),
+    color: `rgba(127,142,160,${(0.78 - i * 0.20).toFixed(2)})`,
+  })).filter((s) => s.data.some((v) => v !== null));
+
+  // Median across prior years at each week, so "normal for this week" has a line.
+  const median = cells.map((_, i) => {
+    const vs = priorSeries.map((s) => s.data[i]).filter((v) => v !== null).sort((a, b) => a - b);
+    return vs.length ? +quantile(vs, 0.5).toFixed(4) : null;
+  });
+
+  const allVals = [...tail.map((p) => p.v),
+                   ...priorSeries.flatMap((s) => s.data)].filter((v) => v !== null);
+  const allMin = Math.min(...allVals);
+  const allMax = Math.max(...allVals);
+
   line(host, {
     labels,
-    datasets: [{
-      label: 'pressure index',
-      data: tail.map((p) => +p.v.toFixed(4)),
-      borderColor: '#22d3ee', borderWidth: 2.2,
-      backgroundColor: hexA('#22d3ee', 0.14), fill: true,
-      pointRadius: 2.5, pointBackgroundColor: '#22d3ee',
-    }],
+    datasets: [
+      ...priorSeries.map((s) => ({
+        label: String(s.year), data: s.data,
+        borderColor: s.color, borderWidth: 1.2,
+        backgroundColor: 'transparent', pointRadius: 0,
+      })),
+      ...(median.some((v) => v !== null) ? [{
+        label: `${priorSeries.length}-yr median`, data: median,
+        borderColor: 'rgba(251,191,36,0.85)', borderDash: [4, 3], borderWidth: 1.3,
+        backgroundColor: 'transparent', pointRadius: 0,
+      }] : []),
+      {
+        label: `${curYear} (current)`,
+        data: tail.map((p) => +p.v.toFixed(4)),
+        borderColor: '#22d3ee', borderWidth: 2.4,
+        backgroundColor: hexA('#22d3ee', 0.12), fill: true,
+        pointRadius: 2.5, pointBackgroundColor: '#22d3ee',
+      },
+    ],
     options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: false, title: { display: true, text: '% ED visits',
-        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } },
+      scales: {
+        y: {
+          // Pin the axis to the data range. Adding prior years widens the
+          // spread, and Chart.js would otherwise anchor at zero and squash the
+          // current-year move back into the hairline this panel exists to fix.
+          min: Math.max(0, Math.floor(allMin * 0.85 * 100) / 100),
+          max: Math.ceil(allMax * 1.05 * 100) / 100,
+          title: { display: true, text: '% ED visits',
+            color: '#4b5a6b', font: { family: 'monospace', size: 9 } },
+        },
+      },
     },
   });
 
