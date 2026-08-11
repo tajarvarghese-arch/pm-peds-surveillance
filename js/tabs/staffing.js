@@ -8,7 +8,7 @@ import { pressureIndex, staffing, d1, d2, percentileRank, quantile, indexQuantum
   wastewaterSignal, corroborate } from '../derive.js';
 import { wwSeries } from './wastewater.js';
 import { toWeekly, fmtDate } from '../data.js';
-import { rerender } from '../app.js';
+import { rerender, saveMix, clearMix, mixIsCustom } from '../app.js';
 
 export default function staffingTab(root, ctx) {
   const edAge = ctx.db.ed_age?.data || [];
@@ -122,11 +122,12 @@ export default function staffingTab(root, ctx) {
     if (!inp) continue;
     inp.oninput = (e) => {
       ctx.mix[age] = Math.max(0, +e.target.value || 0);
+      saveMix(ctx.mix);   // browser only — never the repo
       rerender();
     };
   }
   const reset = document.getElementById('mix-reset');
-  if (reset) reset.onclick = () => { ctx.mix = { ...VISIT_MIX }; rerender(); };
+  if (reset) reset.onclick = () => { ctx.mix = { ...VISIT_MIX }; clearMix(); rerender(); };
 
   // tier chart
   const labels = ppi.map((p) => {
@@ -192,7 +193,12 @@ function mixControls(ctx) {
         <input type="range" id="mix-${slug(age)}" min="0" max="1" step="0.01" value="${ctx.mix[age]}">
         <span class="num" style="color:#7f8ea0;font-size:11px">${(ctx.mix[age] / (total || 1) * 100).toFixed(0)}%</span>
       </label>`).join('')}
-    <button class="ghost" id="mix-reset">reset to default</button>
+    <button class="ghost" id="mix-reset">reset to default estimate</button>
+    ${mixIsCustom() ? `<div class="note" style="border-left-color:var(--ok)">
+      <strong class="s-ok">Custom weights active — saved in this browser only.</strong>
+      They are held in localStorage, never written to the repo, and are visible to nobody else.
+      If these came from board-portal data, keep them here: <code>js/config.js</code> is published.
+    </div>` : ''}
     <div class="note warn"><span class="assumption">assumption</span>
     These are estimated <strong>urgent-care visit shares</strong> by age band, not population shares,
     and not PM Pediatrics' actual mix — we have no clinic-level utilisation data. If you can supply the

@@ -27,10 +27,46 @@ const TABS = [
 ];
 
 // Shared, mutable across tabs. Controls write here, tabs read.
+/**
+ * Visit-mix weights persist in localStorage, never in the repo.
+ *
+ * The real distribution is PM Pediatrics' own operating data. Putting it in
+ * js/config.js would publish it -- this site is a public GitHub Pages build.
+ * Kept in the browser, it survives reloads for whoever set it and is visible to
+ * nobody else.
+ */
+const MIX_KEY = 'pmpeds.visitMix.v1';
+
+function loadMix() {
+  try {
+    const raw = localStorage.getItem(MIX_KEY);
+    if (!raw) return { ...VISIT_MIX };
+    const saved = JSON.parse(raw);
+    const merged = { ...VISIT_MIX };
+    for (const k of Object.keys(VISIT_MIX)) {
+      const v = Number(saved[k]);
+      if (Number.isFinite(v) && v >= 0) merged[k] = v;
+    }
+    return merged;
+  } catch { return { ...VISIT_MIX }; }
+}
+
+export function saveMix(mix) {
+  try { localStorage.setItem(MIX_KEY, JSON.stringify(mix)); } catch { /* private mode */ }
+}
+
+export function clearMix() {
+  try { localStorage.removeItem(MIX_KEY); } catch { /* ignore */ }
+}
+
+export function mixIsCustom() {
+  try { return !!localStorage.getItem(MIX_KEY); } catch { return false; }
+}
+
 export const ctx = {
   db: {},
   manifest: null,
-  mix: { ...VISIT_MIX },
+  mix: loadMix(),
   pathogen: 'Combined',
   region: 'Region 2',
   smoothing: 1,

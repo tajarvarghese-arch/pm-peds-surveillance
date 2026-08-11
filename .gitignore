@@ -1,3 +1,21 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# ---------------------------------------------------------------------------
+# CONFIDENTIAL — never commit
+#
+# This repository is PUBLIC (GitHub Pages). PM Pediatrics board-portal exports
+# are confidential company information and, for a board member, potentially
+# material non-public information. A commit that touches them is public
+# permanently: git history, forks and caches all retain it, and reverting does
+# not undo that.
+#
+# Everything below stays on the local machine. The private ingest writes only
+# here; nothing under private/ is ever read by the published dashboard.
+# ---------------------------------------------------------------------------
+private/
+*.xlsx
+*.xls
+*.csv
+!data/**/*.json
