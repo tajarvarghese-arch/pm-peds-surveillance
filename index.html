@@ -8,6 +8,10 @@
 <link rel="stylesheet" href="./css/terminal.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🫁</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- Spreadsheet parsing runs entirely in the browser. Files chosen on the
+     Volumes tab are read with FileReader and never transmitted: this is a
+     static site, so there is no server to receive them. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 

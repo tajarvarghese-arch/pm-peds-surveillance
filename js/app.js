@@ -13,6 +13,7 @@ import wastewaterTab from './tabs/wastewater.js';
 import explainTab from './tabs/explain.js';
 import marketTab from './tabs/market.js';
 import staffingTab from './tabs/staffing.js';
+import volumesTab from './tabs/volumes.js';
 
 const TABS = [
   { id: 'exec', label: 'Exec Summary', mod: execTab },
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'explain', label: 'Why', mod: explainTab },
   { id: 'market', label: 'Market Supply', mod: marketTab },
   { id: 'staffing', label: 'Staffing', mod: staffingTab },
+  { id: 'volumes', label: 'Volumes ▪', mod: volumesTab },
 ];
 
 // Shared, mutable across tabs. Controls write here, tabs read.
