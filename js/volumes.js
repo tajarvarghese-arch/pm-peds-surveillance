@@ -14,6 +14,10 @@ const KEY = 'pmpeds.volumes.v1';
 // dataset, not a replacement for the visit-type file. Both persist, so the
 // acuity analysis can join against the main volume series.
 const KEY_ACUITY = 'pmpeds.volumes.acuity.v1';
+// Third slot: a totals-only export (channel mix — walk-in vs pre-booked etc.)
+// has no time dimension, so it cannot join the weekly analyses; but it answers
+// a question the other files cannot: HOW demand arrives.
+const KEY_CHANNEL = 'pmpeds.volumes.channel.v1';
 const MAX_BYTES = 4_000_000; // localStorage is ~5MB; leave headroom
 
 // Same fuzzy-header idea as scripts/ingest_visits.py, because the export schema
@@ -191,6 +195,43 @@ function unpivot(grid, header) {
            dims: dimCols.length, categories: [...childCount.keys()] };
 }
 
+/**
+ * Totals-only export: a header row of labels over one numeric row, no time
+ * dimension anywhere (the channel-mix export is exactly this shape). It cannot
+ * join the weekly analyses, but as a mix snapshot it is still worth keeping --
+ * so it becomes its own layout instead of an error.
+ */
+function tryTotals(wb) {
+  for (const name of wb.SheetNames) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+    if (!grid.length) continue;
+    let filterText = null;
+    for (const row of grid.slice(0, 4)) {
+      for (const cell of row || []) {
+        if (typeof cell === 'string' && /^applied filters/i.test(cell.trim())) {
+          filterText = cell.replace(/\s+/g, ' ').trim();
+        }
+      }
+    }
+    for (let r = 0; r < Math.min(grid.length - 1, 10); r++) {
+      const labels = (grid[r] || []).map((c, i) => ({ c, i }))
+        .filter((x) => typeof x.c === 'string' && x.c.trim() && !toISO(x.c)
+                       && !/^applied filters/i.test(x.c.trim()));
+      if (labels.length < 2) continue;
+      const next = grid[r + 1] || [];
+      const pairs = labels
+        .map((x) => ({ label: x.c.trim(), value: numOf(next[x.i]) }))
+        .filter((p) => p.value !== null);
+      if (pairs.length < 2) continue;
+      if ((grid[r] || []).some((c) => toISO(c))) continue;   // has dates: not totals
+      return { layout: 'totals', sheetName: name, pairs, filterText,
+               rawRows: 1, skipped: 0, data: [], cols: {},
+               note: `${pairs.length} totals, no time dimension` };
+    }
+  }
+  return null;
+}
+
 export function parseWorkbook(arrayBuffer, overrides = {}) {
   const wb = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -261,11 +302,17 @@ export function parseWorkbook(arrayBuffer, overrides = {}) {
       }
     }
   }
-  if (!rows.length) throw new Error('no data rows found in any sheet');
+  if (!rows.length) {
+    const totals = tryTotals(wb);
+    if (totals) return totals;
+    throw new Error('no data rows found in any sheet');
+  }
 
   const headers = Object.keys(rows[0]);
   const cols = { ...detectColumns(headers), ...overrides };
   if (!cols.date) {
+    const totals = tryTotals(wb);
+    if (totals) return totals;
     // A totals-only export (one row of grand totals per channel) has no time
     // dimension and cannot join anything else here. Say so specifically rather
     // than failing with a generic missing-column message.
@@ -275,6 +322,11 @@ export function parseWorkbook(arrayBuffer, overrides = {}) {
       + `dimension on rows.`);
   }
   if (!cols.visits) {
+    // The preamble cell often contains the word "date", so a totals sheet can
+    // reach this branch instead of the no-date one. Give totals its shot here
+    // as well before declaring failure.
+    const totals = tryTotals(wb);
+    if (totals) return totals;
     throw new Error(`could not find a visit-count column — headers were: ${headers.join(', ')}`);
   }
 
@@ -297,6 +349,22 @@ export function parseWorkbook(arrayBuffer, overrides = {}) {
   }).sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return { data, cols, headers, sheetName, skipped, rawRows: rows.length };
+}
+
+export function saveChannel(payload) {
+  try { localStorage.setItem(KEY_CHANNEL, JSON.stringify(payload)); } catch { /* quota */ }
+  return payload;
+}
+
+export function loadChannel() {
+  try {
+    const raw = localStorage.getItem(KEY_CHANNEL);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearChannel() {
+  try { localStorage.removeItem(KEY_CHANNEL); } catch { /* ignore */ }
 }
 
 export function saveAcuity(payload) {

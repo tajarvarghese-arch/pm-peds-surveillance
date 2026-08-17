@@ -16,7 +16,7 @@ import { panel, tile, num, delta, empty, levelBadge } from '../ui.js';
 import { line, bar, hexA } from '../charts.js';
 import {
   parseWorkbook, save, load, clear, saveAcuity, loadAcuity, clearAcuity,
-  toWeekly as volWeekly,
+  saveChannel, loadChannel, clearChannel, toWeekly as volWeekly,
 } from '../volumes.js';
 import {
   trimPartialWeek, yoySameWeeks, windowYoY, seriesStats, concentration,
@@ -35,10 +35,11 @@ const CAT_COLORS = { Seasonal: '#22d3ee', 'Non-seasonal': '#4ade80',
 export default function volumes(root, ctx) {
   const store = load();
   const acStore = loadAcuity();
+  const chStore = loadChannel();
 
-  if (!store && !acStore) { root.innerHTML = uploadPrompt(); wireUpload(root, ctx); return; }
+  if (!store && !acStore && !chStore) { root.innerHTML = uploadPrompt(); wireUpload(root, ctx); return; }
   if (!store) {
-    root.innerHTML = `${privacyBar(null, acStore)}
+    root.innerHTML = `${privacyBar(null, acStore, chStore)}
       <div style="height:10px"></div>
       ${panel('Acuity file loaded — main visit file missing', '',
         `<div class="note">The ICD-coded export is loaded, but the visit-type file is what drives
@@ -148,7 +149,7 @@ export default function volumes(root, ctx) {
 
   // ---- render -------------------------------------------------------------
   root.innerHTML = `
-    ${privacyBar(store, acStore)}
+    ${privacyBar(store, acStore, chStore)}
 
     ${trimmed ? `<div class="note gap" style="margin-top:10px">
       <strong>Partial trailing week excluded from every figure below.</strong>
@@ -172,6 +173,8 @@ export default function volumes(root, ctx) {
       ${tile('Busiest 20 weeks hold', conc.top[20] !== null ? `${(conc.top[20] * 100).toFixed(0)}%` : '--',
         'of all visits in the period')}
     </div>
+
+    ${chStore ? channelPanel(chStore, total, lastFull) : ''}
 
     ${businessSection(catYoY, catStats, statTotal, floorStat, peakWeekFloor, momentum, momTotal, conc, ctx)}
 
@@ -199,7 +202,73 @@ export default function volumes(root, ctx) {
   `;
 
   wireUpload(root, ctx);
-  mountCharts({ rows, weeklyAll, wkOf, cats, topTypes, conc, fit, ppiWeekly, acuity, trimmed, locs });
+  mountCharts({ rows, weeklyAll, wkOf, cats, topTypes, conc, fit, ppiWeekly, acuity, trimmed, locs, chStore });
+}
+
+/* ======================= channel mix ===================================== */
+
+/**
+ * A totals snapshot has no weeks, so honesty here means two things: identify
+ * the denominator instead of double-counting it, and refuse to reconcile
+ * against the weekly file as if the two covered the same window.
+ */
+function channelPanel(chStore, mainTotal, lastFull) {
+  const all = chStore.pairs || [];
+  if (all.length < 2) return '';
+  // Ratio columns ("% Pre-Booked", "% New Patients") are rates, not visit
+  // counts — mixing them into the shares would corrupt the math.
+  const rates = all.filter((p) => /^%/.test(p.label) || p.value <= 1.5);
+  const pairs = all.filter((p) => !rates.includes(p));
+  if (pairs.length < 2) return '';
+  // If one label equals the sum of the others (within 2%), it is the
+  // denominator, not a channel.
+  const sum = pairs.reduce((a, p) => a + p.value, 0);
+  let denom = null;
+  for (const p of pairs) {
+    const others = sum - p.value;
+    if (others > 0 && Math.abs(p.value - others) / p.value < 0.02) { denom = p; break; }
+  }
+  const channels = pairs.filter((p) => p !== denom).sort((a, b) => b.value - a.value);
+  const base = denom ? denom.value : channels.reduce((a, p) => a + p.value, 0);
+
+  return `<section class="panel" style="margin-bottom:10px">
+    <h2>How demand arrives — channel mix
+      <span class="sub">${chStore.fileName || 'totals snapshot'} · no time dimension</span></h2>
+    <div class="panel-body">
+      <div class="grid g2">
+        <div><div class="chart-wrap short"><canvas id="v-channel"></canvas></div></div>
+        <div>
+          <table class="dt">
+            <thead><tr><th>Channel</th><th>Visits</th><th>Share</th></tr></thead>
+            <tbody>${channels.map((c, i) => `<tr>
+              <td><span style="color:${PALETTE[i % PALETTE.length]}">■</span> ${c.label}</td>
+              <td class="num">${c.value.toLocaleString()}</td>
+              <td class="num">${base > 0 ? ((c.value / base) * 100).toFixed(1) : '--'}%</td>
+            </tr>`).join('')}
+            ${denom ? `<tr style="border-top:1px solid var(--line-hot)">
+              <td><strong>${denom.label}</strong></td>
+              <td class="num"><strong>${denom.value.toLocaleString()}</strong></td>
+              <td class="num">100%</td></tr>` : ''}
+            ${rates.map((r) => `<tr>
+              <td style="color:#7f8ea0">${r.label}</td>
+              <td class="num" colspan="2">${r.value <= 1.5 ? (r.value * 100).toFixed(1) + '%' : r.value.toLocaleString()}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+          ${channels.length >= 2 && base > 0 && channels[0].value / base > 0.5 ? `<div class="note">
+            <strong>Majority of demand arrives through “${channels[0].label}”.</strong> The larger that
+            share, the more volume is funnel-shaped — bookable, forecastable, and smoothable — and the
+            less of the week is at the mercy of the walk-in surge.</div>` : ''}
+          ${chStore.filterText ? `<div class="note" style="color:#4b5a6b">Export window per its own
+            filters: ${chStore.filterText.replace(/^applied filters:?\s*/i, '')}</div>` : ''}
+          ${mainTotal ? `<div class="note gap">Not reconciled against the weekly file: the two exports
+            carry different date windows (this one per its filters above; the weekly file through
+            ${lastFull || '--'}), so their totals are not comparable one-to-one. A <em>weekly</em>
+            by-channel export would unlock the real question — whether walk-in share expands in surge
+            weeks — which a single snapshot cannot answer.</div>` : ''}
+        </div>
+      </div>
+    </div>
+  </section>`;
 }
 
 /* ======================= business section ================================ */
@@ -408,7 +477,7 @@ function integrationSection(fit, envYoY, yoyTotal, residStreak, matrix, pathSeri
 
 /* ======================= charts ========================================== */
 
-function mountCharts({ rows, weeklyAll, wkOf, cats, topTypes, conc, fit, ppiWeekly, acuity, trimmed, locs }) {
+function mountCharts({ rows, weeklyAll, wkOf, cats, topTypes, conc, fit, ppiWeekly, acuity, trimmed, locs, chStore }) {
   const fmt = (t) => {
     const d = new Date(t + 'T00:00:00Z');
     return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' });
@@ -485,6 +554,22 @@ function mountCharts({ rows, weeklyAll, wkOf, cats, topTypes, conc, fit, ppiWeek
     }
   }
 
+  // channel mix bar
+  const chC = document.getElementById('v-channel');
+  if (chC && chStore?.pairs?.length) {
+    const counts = chStore.pairs.filter((p) => !/^%/.test(p.label) && p.value > 1.5);
+    const sum = counts.reduce((a, p) => a + p.value, 0);
+    const ch = counts
+      .filter((p) => !(sum - p.value > 0 && Math.abs(p.value - (sum - p.value)) / p.value < 0.02))
+      .sort((a, b) => b.value - a.value);
+    bar(chC, {
+      labels: ch.map((c) => c.label),
+      datasets: [{ label: 'visits', data: ch.map((c) => c.value),
+        backgroundColor: ch.map((_, i) => hexA(PALETTE[i % PALETTE.length], 0.8)) }],
+      options: { indexAxis: 'y', plugins: { legend: { display: false } } },
+    });
+  }
+
   // by-type over time (existing behaviour, trimmed)
   const typesC = document.getElementById('v-types');
   if (typesC) {
@@ -526,9 +611,10 @@ function alignToMonday(points) {
   });
 }
 
-function privacyBar(store, acStore) {
+function privacyBar(store, acStore, chStore) {
   const files = [store && `${store.fileName || 'visit file'}`,
-                 acStore && `${acStore.fileName || 'acuity file'} (ICD)`]
+                 acStore && `${acStore.fileName || 'acuity file'} (ICD)`,
+                 chStore && `${chStore.fileName || 'channel file'} (totals)`]
     .filter(Boolean).join(' + ');
   return `<section class="panel" style="border-color:#4ade80">
     <h2 style="color:#4ade80">Private — these files never left your browser
@@ -579,7 +665,7 @@ function wireUpload(root, ctx) {
   const status = root.querySelector('#v-status');
   if (pick && input) pick.onclick = () => input.click();
   if (wipe) wipe.onclick = () => {
-    if (confirm('Erase all loaded visit data from this browser?')) { clear(); clearAcuity(); rerender(); }
+    if (confirm('Erase all loaded visit data from this browser?')) { clear(); clearAcuity(); clearChannel(); rerender(); }
   };
   if (!input) return;
 
@@ -591,13 +677,18 @@ function wireUpload(root, ctx) {
     try {
       const buf = await file.arrayBuffer();
       const parsed = parseWorkbook(buf);
-      const types = [...new Set(parsed.data.map((r) => r.type))];
-      const isAcuity = looksLikeICD(types);
       const payload = { ...parsed, fileName: file.name,
         loadedAt: new Date().toISOString().slice(0, 16).replace('T', ' ') };
-      if (isAcuity) saveAcuity(payload); else save(payload);
-      status.innerHTML = `<strong class="s-ok">loaded${isAcuity ? ' as the ICD/acuity file' : ''}.</strong>
-        ${parsed.rawRows.toLocaleString()} rows from "${parsed.sheetName}"${parsed.note ? ` · ${parsed.note}` : ''}`;
+      let slot = 'visit-type file';
+      if (parsed.layout === 'totals') { saveChannel(payload); slot = 'channel/totals snapshot'; }
+      else {
+        const types = [...new Set(parsed.data.map((r) => r.type))];
+        if (looksLikeICD(types)) { saveAcuity(payload); slot = 'ICD/acuity file'; }
+        else save(payload);
+      }
+      status.innerHTML = `<strong class="s-ok">loaded as the ${slot}.</strong>
+        ${parsed.layout === 'totals' ? `${parsed.pairs.length} totals` : `${parsed.rawRows.toLocaleString()} rows`}
+        from "${parsed.sheetName}"${parsed.note ? ` · ${parsed.note}` : ''}`;
       setTimeout(rerender, 900);
     } catch (e) {
       status.innerHTML = `<strong class="s-critical">could not read that file.</strong> ${e.message}`;
