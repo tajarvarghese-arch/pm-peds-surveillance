@@ -296,6 +296,26 @@ Cloudflare Access or switch hosts.
 
 ---
 
+## The Report tab — The Seasonal Engine
+
+An executive report computed live from the browser-loaded exports (same slots
+as the Volumes tab; the repository carries the machinery, never a number).
+Load up to four files — visits-by-type (required), the ICD acuity export, the
+by-location monthly export, and the channel totals — and it produces:
+
+- **Growth, decomposed.** Calendar paired-week YoY next to a *wave-aligned*
+  YoY (each season summed from its own peak), so a respiratory wave that
+  arrives weeks early stops masquerading as lost demand. With the location
+  file loaded, the same decline is further split into same-store versus
+  footprint (openings/closures), with an exactly-reconciling bridge.
+- **Phase analysis.** Every service line's week-of-year profile, phase-sorted,
+  which makes the counter-seasonal block (the summer book) visible.
+- **Acuity.** High-acuity diagnoses per 1,000 visits as a drift indicator, an
+  influenza season-over-season overlay, and a structural-vs-epidemic split by
+  clinical grouping.
+- **Growth vs volatility quadrant** per service line, deseasonalized, sized by
+  volume — which lines are worth growing vs which break the staffing model.
+
 ## Layout
 
 ```
@@ -304,9 +324,11 @@ css/terminal.css      brutalist dark theme
 js/config.js          markets, palette, thresholds, documented gaps
 js/data.js            snapshot loader + live CDC fallback + freshness probe
 js/derive.js          d1/d2, percentiles, seasonal bands, forecast, staffing
+js/volumes.js         browser-only ingest of confidential exports (4 slots)
+js/analysis.js        pure computations for the Volumes + Report tabs
 js/charts.js          Chart.js theming, sparklines, heat ramp
-js/tabs/*.js          eight tabs (exec, pathogens, historical, forecast,
-                      geo, wastewater, why, staffing)
+js/tabs/*.js          tabs (exec, pathogens, historical, forecast, geo,
+                      wastewater, why, market, staffing, volumes, report)
 scripts/fetch_data.py CDC -> data/*.json
 scripts/archive_history.py  accumulates the snapshot-only dataset
 ```

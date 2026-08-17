@@ -17,6 +17,7 @@ import { line, bar, hexA } from '../charts.js';
 import {
   parseWorkbook, save, load, clear, saveAcuity, loadAcuity, clearAcuity,
   saveChannel, loadChannel, clearChannel, toWeekly as volWeekly,
+  looksLikeLocations, asLocationRows, saveLocations, loadLocations, clearLocations,
 } from '../volumes.js';
 import {
   trimPartialWeek, yoySameWeeks, windowYoY, seriesStats, concentration,
@@ -612,9 +613,11 @@ function alignToMonday(points) {
 }
 
 function privacyBar(store, acStore, chStore) {
+  const locStore = loadLocations();
   const files = [store && `${store.fileName || 'visit file'}`,
                  acStore && `${acStore.fileName || 'acuity file'} (ICD)`,
-                 chStore && `${chStore.fileName || 'channel file'} (totals)`]
+                 chStore && `${chStore.fileName || 'channel file'} (totals)`,
+                 locStore && `${locStore.fileName || 'location file'} (sites)`]
     .filter(Boolean).join(' + ');
   return `<section class="panel" style="border-color:#4ade80">
     <h2 style="color:#4ade80">Private — these files never left your browser
@@ -665,7 +668,9 @@ function wireUpload(root, ctx) {
   const status = root.querySelector('#v-status');
   if (pick && input) pick.onclick = () => input.click();
   if (wipe) wipe.onclick = () => {
-    if (confirm('Erase all loaded visit data from this browser?')) { clear(); clearAcuity(); clearChannel(); rerender(); }
+    if (confirm('Erase all loaded visit data from this browser?')) {
+      clear(); clearAcuity(); clearChannel(); clearLocations(); rerender();
+    }
   };
   if (!input) return;
 
@@ -681,7 +686,10 @@ function wireUpload(root, ctx) {
         loadedAt: new Date().toISOString().slice(0, 16).replace('T', ' ') };
       let slot = 'visit-type file';
       if (parsed.layout === 'totals') { saveChannel(payload); slot = 'channel/totals snapshot'; }
-      else {
+      else if (looksLikeLocations(parsed)) {
+        saveLocations({ ...asLocationRows(parsed), fileName: file.name, loadedAt: payload.loadedAt });
+        slot = 'by-location file';
+      } else {
         const types = [...new Set(parsed.data.map((r) => r.type))];
         if (looksLikeICD(types)) { saveAcuity(payload); slot = 'ICD/acuity file'; }
         else save(payload);

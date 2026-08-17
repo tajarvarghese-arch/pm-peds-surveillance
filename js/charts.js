@@ -90,6 +90,18 @@ export function bar(canvas, { labels, datasets, options = {} }) {
   return c;
 }
 
+/** Scatter/bubble, same theming and registry as line/bar. */
+export function scatter(canvas, { datasets, options = {} }) {
+  destroy(canvas);
+  const c = new Chart(canvas.getContext('2d'), {
+    type: 'scatter',
+    data: { datasets },
+    options: baseOpts({ interaction: { mode: 'nearest', intersect: true }, ...options }),
+  });
+  registry.set(canvas.id || canvas, c);
+  return c;
+}
+
 export function destroy(canvas) {
   const key = canvas.id || canvas;
   const existing = registry.get(key);

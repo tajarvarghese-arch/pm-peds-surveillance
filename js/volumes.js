@@ -18,6 +18,10 @@ const KEY_ACUITY = 'pmpeds.volumes.acuity.v1';
 // has no time dimension, so it cannot join the weekly analyses; but it answers
 // a question the other files cannot: HOW demand arrives.
 const KEY_CHANNEL = 'pmpeds.volumes.channel.v1';
+// Fourth slot: the by-location export (sites on rows, months across). It is the
+// only file that can split network change into same-store performance versus
+// footprint (openings/closures), so it persists separately too.
+const KEY_LOCATIONS = 'pmpeds.volumes.locations.v1';
 const MAX_BYTES = 4_000_000; // localStorage is ~5MB; leave headroom
 
 // Same fuzzy-header idea as scripts/ingest_visits.py, because the export schema
@@ -349,6 +353,45 @@ export function parseWorkbook(arrayBuffer, overrides = {}) {
   }).sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return { data, cols, headers, sheetName, skipped, rawRows: rows.length };
+}
+
+/**
+ * Does a parsed crosstab look like a by-location file rather than a by-type
+ * one? A visit-type export carries a couple dozen categories at most; a
+ * location export carries the whole clinic roster. Row-label cardinality is
+ * the tell, and it needs no knowledge of any actual site name.
+ */
+export function looksLikeLocations(parsed) {
+  if (parsed.layout !== 'crosstab' || !parsed.data?.length) return false;
+  // Two dimensions (group + category) marks the visit-type matrix, whatever its
+  // cardinality — only a single-dimension crosstab can be a site roster.
+  if (parsed.data.some((r) => r.category !== '(all)')) return false;
+  const labels = new Set(parsed.data.map((r) => r.type));
+  return labels.size >= 30;
+}
+
+/** Re-key a location crosstab so sites land in `location`, not `type`. */
+export function asLocationRows(parsed) {
+  return {
+    ...parsed,
+    data: parsed.data.map((r) => ({ ...r, location: r.type, type: '(all)' })),
+  };
+}
+
+export function saveLocations(payload) {
+  try { localStorage.setItem(KEY_LOCATIONS, JSON.stringify(payload)); } catch { /* quota */ }
+  return payload;
+}
+
+export function loadLocations() {
+  try {
+    const raw = localStorage.getItem(KEY_LOCATIONS);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearLocations() {
+  try { localStorage.removeItem(KEY_LOCATIONS); } catch { /* ignore */ }
 }
 
 export function saveChannel(payload) {
