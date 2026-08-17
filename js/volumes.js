@@ -10,6 +10,10 @@
 // That is not a policy promise -- it is the only thing a static page can do.
 
 const KEY = 'pmpeds.volumes.v1';
+// Second slot: an ICD-coded export (the high-acuity file) is a different
+// dataset, not a replacement for the visit-type file. Both persist, so the
+// acuity analysis can join against the main volume series.
+const KEY_ACUITY = 'pmpeds.volumes.acuity.v1';
 const MAX_BYTES = 4_000_000; // localStorage is ~5MB; leave headroom
 
 // Same fuzzy-header idea as scripts/ingest_visits.py, because the export schema
@@ -293,6 +297,22 @@ export function parseWorkbook(arrayBuffer, overrides = {}) {
   }).sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return { data, cols, headers, sheetName, skipped, rawRows: rows.length };
+}
+
+export function saveAcuity(payload) {
+  try { localStorage.setItem(KEY_ACUITY, JSON.stringify(payload)); } catch { /* quota */ }
+  return payload;
+}
+
+export function loadAcuity() {
+  try {
+    const raw = localStorage.getItem(KEY_ACUITY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearAcuity() {
+  try { localStorage.removeItem(KEY_ACUITY); } catch { /* ignore */ }
 }
 
 export function save(payload) {
