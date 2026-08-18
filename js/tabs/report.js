@@ -451,7 +451,8 @@ export default function report(root) {
         </div>
         <div>
           <div class="chart-wrap"><canvas id="r-chshare"></canvas></div>
-          <div class="note">Shares of walk-in + pre-booked visits.
+          <div class="note">Shares aligned by ISO week, one line per year — the vertical gap between a
+          solid line and its dashed prior-year twin IS the year-over-year change.
           ${ch.corrShareVol !== null ? `Walk-in share vs volume: r = ${ch.corrShareVol.toFixed(2)} —
           surge weeks skew ${ch.corrShareVol > 0 ? 'walk-in, so peak load is unschedulable' :
           'pre-booked: winter demand books ahead, and scheduling amplifies rather than absorbs the peak'}.` : ''}
@@ -655,14 +656,36 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
     }
     const shC = document.getElementById('r-chshare');
     if (shC) {
-      const ds = [{ label: 'walk-in share %', data: ch.wShare.map((p) => +p.v.toFixed(1)),
-                    borderColor: AMBER, backgroundColor: 'transparent' }];
-      if (ch.n2?.length === ch.t2.length) {
-        ds.push({ label: 'new-patient share %',
-          data: ch.n2.map((p, i) => +(p.v / ch.t2[i].v * 100).toFixed(1)),
-          borderColor: GREEN, backgroundColor: 'transparent' });
+      // Same-week YoY overlay: x is ISO week-of-year, one dataset per metric
+      // per year, prior year dashed. The vertical gap is the YoY change.
+      const share = (num2) => num2.map((p, i) => ({ t: p.t, v: p.v / ch.t2[i].v * 100 }));
+      const seriesByYear = (ser) => {
+        const by = new Map();
+        for (const p of ser) {
+          const y = p.t.slice(0, 4);
+          if (!by.has(y)) by.set(y, new Map());
+          by.get(y).set(isoWeekOf(p.t), +p.v.toFixed(1));
+        }
+        return by;
+      };
+      const metrics = [['walk-in', share(ch.w2), AMBER]];
+      if (ch.n2?.length === ch.t2.length) metrics.push(['new-patient', share(ch.n2), GREEN]);
+      const wks = Array.from({ length: 52 }, (_, i) => i + 1);
+      const years = [...new Set(ch.t2.map((p) => p.t.slice(0, 4)))].sort().slice(-2);
+      const ds = [];
+      for (const [name, ser, col] of metrics) {
+        const by = seriesByYear(ser);
+        years.forEach((y, yi) => {
+          const m = by.get(y);
+          if (!m) return;
+          const prior = yi < years.length - 1;
+          ds.push({ label: `${name} ${y}`, data: wks.map((w) => m.get(w) ?? null),
+                    borderColor: prior ? hexA(col, 0.55) : col,
+                    borderDash: prior ? [4, 3] : undefined,
+                    borderWidth: prior ? 1.4 : 2.2, backgroundColor: 'transparent' });
+        });
       }
-      line(shC, { labels: ch.wShare.map((p) => wkLabel(p.t)), datasets: ds });
+      line(shC, { labels: wks.map((w) => `w${w}`), datasets: ds });
     }
   }
 
