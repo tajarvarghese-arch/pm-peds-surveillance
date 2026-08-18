@@ -18,6 +18,7 @@ import {
   parseWorkbook, save, load, clear, saveAcuity, loadAcuity, clearAcuity,
   saveChannel, loadChannel, clearChannel, toWeekly as volWeekly,
   looksLikeLocations, asLocationRows, saveLocations, loadLocations, clearLocations,
+  parseWeeklyMetrics, saveChannelWeekly, loadChannelWeekly, clearChannelWeekly,
 } from '../volumes.js';
 import {
   trimPartialWeek, yoySameWeeks, windowYoY, seriesStats, concentration,
@@ -617,7 +618,8 @@ function privacyBar(store, acStore, chStore) {
   const files = [store && `${store.fileName || 'visit file'}`,
                  acStore && `${acStore.fileName || 'acuity file'} (ICD)`,
                  chStore && `${chStore.fileName || 'channel file'} (totals)`,
-                 locStore && `${locStore.fileName || 'location file'} (sites)`]
+                 locStore && `${locStore.fileName || 'location file'} (sites)`,
+                 loadChannelWeekly() && `${loadChannelWeekly().fileName || 'weekly metrics'} (channels/wk)`]
     .filter(Boolean).join(' + ');
   return `<section class="panel" style="border-color:#4ade80">
     <h2 style="color:#4ade80">Private — these files never left your browser
@@ -681,6 +683,16 @@ function wireUpload(root, ctx) {
     status.innerHTML = `reading ${file.name}…`;
     try {
       const buf = await file.arrayBuffer();
+      // The weekly multi-metric shape (several numeric columns per week) must be
+      // tried first: the generic reader would keep one column and drop the rest.
+      const wm = parseWeeklyMetrics(buf);
+      if (wm) {
+        saveChannelWeekly({ ...wm, fileName: file.name,
+          loadedAt: new Date().toISOString().slice(0, 16).replace('T', ' ') });
+        status.innerHTML = `<strong class="s-ok">loaded as the weekly channel/metrics file.</strong> ${wm.note}`;
+        setTimeout(rerender, 900);
+        return;
+      }
       const parsed = parseWorkbook(buf);
       const payload = { ...parsed, fileName: file.name,
         loadedAt: new Date().toISOString().slice(0, 16).replace('T', ' ') };

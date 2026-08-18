@@ -14,7 +14,8 @@
 import { panel, tile, empty } from '../ui.js';
 import { line, bar, scatter, hexA, heatColor } from '../charts.js';
 import {
-  load, loadAcuity, loadChannel, loadLocations, toWeekly as volWeekly,
+  load, loadAcuity, loadChannel, loadLocations, loadChannelWeekly,
+  toWeekly as volWeekly,
 } from '../volumes.js';
 import {
   trimPartialWeek, trimPartialMonth, toMonthly, pairedYoY, seriesStats,
@@ -60,7 +61,8 @@ export default function report(root) {
         <br>· the visits-by-type export (weekly matrix) — required
         <br>· the ICD-coded high-acuity export — acuity &amp; influenza layers
         <br>· the by-location monthly export — footprint &amp; same-store layers
-        <br>· the channel-mix totals export — demand-arrival context</div>
+        <br>· the weekly channel/metrics export (walk-in, pre-booked, new patients by week) — demand-arrival layer
+        <br>· the channel-mix totals export — period context</div>
       </div>`);
     return;
   }
@@ -168,6 +170,65 @@ export default function report(root) {
 
   const chStore = loadChannel();
 
+  /* ---- weekly channel mix ----------------------------------------------- */
+  // Roles are matched from the export's own column names, so the section works
+  // whatever the portal calls them; metrics with no matching role are ignored.
+  const cwStore = loadChannelWeekly();
+  let ch = null;
+  if (cwStore?.data?.length >= 12) {
+    const metrics = cwStore.metrics || [];
+    const roleOf = (re) => metrics.find((m) => re.test(m)) || null;
+    const roles = {
+      walk: roleOf(/walk/i), book: roleOf(/book|sched/i),
+      newp: roleOf(/new/i), pphr: roleOf(/hour/i),
+    };
+    const S = (name) => name
+      ? cwStore.data.filter((r) => r[name] !== undefined)
+          .map((r) => ({ t: r.date, v: r[name] })) : null;
+    const walk = S(roles.walk), book = S(roles.book);
+    if (walk && book) {
+      const bm = new Map(book.map((p) => [p.t, p.v]));
+      const totW = walk.filter((p) => bm.has(p.t))
+        .map((p) => ({ t: p.t, v: p.v + bm.get(p.t) }));
+      const { weekly: totT, trimmed: chTrim } = trimPartialWeek(totW);
+      const keep = new Set(totT.map((p) => p.t));
+      // A partial LEADING week is the same stub problem at the other end.
+      const head = totT.slice(0, 8).map((p) => p.v).sort((a, b) => a - b);
+      const headMed = head[Math.floor(head.length / 2)];
+      if (totT.length && totT[0].v < 0.6 * headMed) keep.delete(totT[0].t);
+      const cut = (ser) => ser ? ser.filter((p) => keep.has(p.t)) : null;
+      const w2 = cut(walk), b2 = cut(book), n2 = cut(S(roles.newp)), h2 = cut(S(roles.pphr));
+      const t2 = cut(totW);
+      const lastCh = t2.at(-1)?.t;
+      const wShare = w2.map((p, i) => ({ t: p.t, v: p.v / t2[i].v * 100 }));
+      const yo = (ser) => ser && lastCh ? pairedYoY(ser, lastCh) : null;
+      const corrShareVol = (() => {
+        const n = wShare.length;
+        if (n < 20) return null;
+        const xs = wShare.map((p) => p.v), ys = t2.map((p) => p.v);
+        const mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+        let s1 = 0, s2 = 0, s3 = 0;
+        for (let i = 0; i < n; i++) {
+          s1 += (xs[i] - mx) * (ys[i] - my); s2 += (xs[i] - mx) ** 2; s3 += (ys[i] - my) ** 2;
+        }
+        return s2 && s3 ? s1 / Math.sqrt(s2 * s3) : null;
+      })();
+      let hours = null;
+      if (h2?.length === t2.length) {
+        const hs = t2.map((p, i) => ({ t: p.t, v: h2[i].v > 0 ? p.v / h2[i].v : null }))
+          .filter((p) => p.v !== null);
+        const vals = hs.map((p) => p.v);
+        hours = { swing: Math.max(...vals) / Math.min(...vals),
+                  volSwing: Math.max(...t2.map((p) => p.v)) / Math.min(...t2.map((p) => p.v)),
+                  yoy: yo(hs) };
+      }
+      ch = { roles, w2, b2, n2, h2, t2, wShare, chTrim,
+             yoWalk: yo(w2), yoBook: yo(b2), yoNew: yo(n2), corrShareVol, hours,
+             firstShare: wShare.slice(0, 8).reduce((a, p) => a + p.v, 0) / Math.min(8, wShare.length),
+             lastShare: wShare.slice(-8).reduce((a, p) => a + p.v, 0) / Math.min(8, wShare.length) };
+    }
+  }
+
   /* ---- headline findings (computed, then phrased) ----------------------- */
   const findings = [];
   if (wave && calYoY?.pct !== null) {
@@ -200,6 +261,14 @@ export default function report(root) {
     findings.push(`A genuine counter-seasonal block exists — ${counterSeasonal.length} line(s) peaking in
       summer (${counterSeasonal.slice(0, 3).map((x) => x.t).join(', ')}${counterSeasonal.length > 3 ? '…' : ''}) —
       but check its size against the trough before treating it as a hedge.`);
+  }
+  if (ch?.yoWalk && ch?.yoBook) {
+    findings.push(`<strong>The channel split of the change:</strong> walk-in ${fmtPct(ch.yoWalk.pct)} vs
+      pre-booked ${fmtPct(ch.yoBook.pct)} on paired weeks${ch.yoNew ? `, new patients ${fmtPct(ch.yoNew.pct)}` : ''};
+      walk-in share moved ${ch.firstShare.toFixed(1)}% → ${ch.lastShare.toFixed(1)}% over the record.
+      ${ch.corrShareVol !== null ? `Walk-in share correlates ${ch.corrShareVol > 0 ? 'positively' : 'negatively'}
+      (r=${ch.corrShareVol.toFixed(2)}) with volume — surge weeks skew
+      ${ch.corrShareVol > 0 ? 'walk-in' : 'pre-booked'}.` : ''}`);
   }
   if (acuity?.rateAvg) {
     const drift = acuity.rateAvg.prv > 0
@@ -359,11 +428,44 @@ export default function report(root) {
 
     <div style="height:10px"></div>
 
-    ${chStore?.pairs?.length ? panel('Layer 6 · How demand arrives', 'period totals — no time dimension', `
+    ${ch ? panel('Layer 6 · How demand arrives, week by week',
+      `${ch.t2.length} weeks · roles matched from the export's own column names`, `
+      ${ch.chTrim ? `<div class="note gap"><strong>Partial trailing week (${ch.chTrim.t})
+        excluded.</strong></div>` : ''}
+      <div class="grid g4" style="margin-bottom:10px">
+        ${tile('Walk-in YoY', ch.yoWalk ? fmtPct(ch.yoWalk.pct) : '--',
+          ch.yoWalk ? `${ch.yoWalk.weeks} paired weeks` : '', ch.yoWalk ? cls(ch.yoWalk.pct) : '')}
+        ${tile('Pre-booked YoY', ch.yoBook ? fmtPct(ch.yoBook.pct) : '--',
+          ch.yoBook ? `${ch.yoBook.weeks} paired weeks` : '', ch.yoBook ? cls(ch.yoBook.pct) : '')}
+        ${tile('Walk-in share drift', `${ch.firstShare.toFixed(1)}% → ${ch.lastShare.toFixed(1)}%`,
+          'first 8 weeks vs last 8')}
+        ${ch.hours ? tile('Hours flex vs volume', `${ch.hours.swing.toFixed(2)}× / ${ch.hours.volSwing.toFixed(2)}×`,
+          'implied operating hours vs visit swing') : tile('New patients YoY',
+          ch.yoNew ? fmtPct(ch.yoNew.pct) : '--', '', ch.yoNew ? cls(ch.yoNew.pct) : '')}
+      </div>
+      <div class="grid g2">
+        <div>
+          <div class="chart-wrap"><canvas id="r-chmix"></canvas></div>
+          <div class="note">Weekly volume by booking channel. Where the decline concentrates —
+          walk-in door or scheduled book — is a different problem with a different owner.</div>
+        </div>
+        <div>
+          <div class="chart-wrap"><canvas id="r-chshare"></canvas></div>
+          <div class="note">Shares of walk-in + pre-booked visits.
+          ${ch.corrShareVol !== null ? `Walk-in share vs volume: r = ${ch.corrShareVol.toFixed(2)} —
+          surge weeks skew ${ch.corrShareVol > 0 ? 'walk-in, so peak load is unschedulable' :
+          'pre-booked: winter demand books ahead, and scheduling amplifies rather than absorbs the peak'}.` : ''}
+          ${ch.hours ? ` Implied hours swing ${ch.hours.swing.toFixed(2)}× against a
+          ${ch.hours.volSwing.toFixed(2)}× volume swing${ch.hours.yoy?.pct != null ?
+          `; hours ${fmtPct(ch.hours.yoy.pct)} YoY` : ''} — throughput, not capacity, does the flexing.` : ''}</div>
+        </div>
+      </div>`)
+    : chStore?.pairs?.length ? panel('Layer 6 · How demand arrives', 'period totals — no time dimension', `
       <div class="grid g4">${chStore.pairs.slice(0, 8).map((p) => tile(p.label,
         p.value <= 1.5 ? `${(p.value * 100).toFixed(1)}%` : fmtN(p.value), '')).join('')}</div>
-      <div class="note">A totals snapshot cannot be joined to weeks. The question that matters —
-      does walk-in share expand in surge weeks? — needs a weekly by-channel export.</div>`) : ''}
+      <div class="note">A totals snapshot cannot be joined to weeks. Re-export the same visual with the
+      week dimension on rows and load it on the Volumes tab — the weekly channel analysis unlocks
+      automatically.</div>`) : ''}
 
     ${panel('What this data cannot tell you', 'read before quoting numbers upstream', `
       <ul style="margin:0 0 0 18px;font-size:11.5px;line-height:1.9;color:${DIM}">
@@ -378,7 +480,7 @@ export default function report(root) {
       </ul>`)}
   `;
 
-  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp });
+  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch });
 }
 
 /* ======================= sub-renderers =================================== */
@@ -431,7 +533,7 @@ function acuityTable(acuity) {
 
 /* ======================= charts ========================================== */
 
-function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp }) {
+function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch }) {
   const weeks = weeklyAll.map((p) => p.t);
   const labels = weeks.map(wkLabel);
 
@@ -534,6 +636,34 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
                 y: { title: { display: true, text: 'YoY %',
                               color: DIM, font: { family: 'monospace', size: 10 } } } } },
     });
+  }
+
+  // L6: weekly channel mix
+  if (ch) {
+    const mixC = document.getElementById('r-chmix');
+    if (mixC) {
+      line(mixC, {
+        labels: ch.t2.map((p) => wkLabel(p.t)),
+        datasets: [
+          { label: ch.roles.book, data: ch.b2.map((p) => p.v), borderColor: ACCENT,
+            backgroundColor: hexA(ACCENT, 0.35), fill: true, stack: 's', pointRadius: 0, borderWidth: 1.2 },
+          { label: ch.roles.walk, data: ch.w2.map((p) => p.v), borderColor: AMBER,
+            backgroundColor: hexA(AMBER, 0.35), fill: true, stack: 's', pointRadius: 0, borderWidth: 1.2 },
+        ],
+        options: { scales: { y: { stacked: true }, x: { stacked: true } } },
+      });
+    }
+    const shC = document.getElementById('r-chshare');
+    if (shC) {
+      const ds = [{ label: 'walk-in share %', data: ch.wShare.map((p) => +p.v.toFixed(1)),
+                    borderColor: AMBER, backgroundColor: 'transparent' }];
+      if (ch.n2?.length === ch.t2.length) {
+        ds.push({ label: 'new-patient share %',
+          data: ch.n2.map((p, i) => +(p.v / ch.t2[i].v * 100).toFixed(1)),
+          borderColor: GREEN, backgroundColor: 'transparent' });
+      }
+      line(shC, { labels: ch.wShare.map((p) => wkLabel(p.t)), datasets: ds });
+    }
   }
 
   // L7: footprint charts

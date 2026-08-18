@@ -315,6 +315,11 @@ by-location monthly export, and the channel totals — and it produces:
   clinical grouping.
 - **Growth vs volatility quadrant** per service line, deseasonalized, sized by
   volume — which lines are worth growing vs which break the staffing model.
+- **Demand arrival, weekly.** With a weekly channel export loaded (walk-in /
+  pre-booked / new patients / patients-per-hour by week — a fifth auto-detected
+  slot), the tab splits YoY change by booking channel, tests whether surge
+  weeks skew walk-in or pre-booked, and measures how much operating hours
+  actually flex against the volume swing.
 
 ## Layout
 
@@ -324,7 +329,7 @@ css/terminal.css      brutalist dark theme
 js/config.js          markets, palette, thresholds, documented gaps
 js/data.js            snapshot loader + live CDC fallback + freshness probe
 js/derive.js          d1/d2, percentiles, seasonal bands, forecast, staffing
-js/volumes.js         browser-only ingest of confidential exports (4 slots)
+js/volumes.js         browser-only ingest of confidential exports (5 slots)
 js/analysis.js        pure computations for the Volumes + Report tabs
 js/charts.js          Chart.js theming, sparklines, heat ramp
 js/tabs/*.js          tabs (exec, pathogens, historical, forecast, geo,

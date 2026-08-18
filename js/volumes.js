@@ -96,7 +96,11 @@ function toISO(v) {
 
 const numOf = (v) => {
   if (typeof v === 'number') return v;
-  const n = Number(String(v ?? '').replace(/[,$\s]/g, ''));
+  // Blank cells are absent data, not zeros: Number('') is 0, which would let an
+  // empty cell (or a footer row's empty columns) masquerade as a measurement.
+  const s = String(v ?? '').replace(/[,$\s]/g, '');
+  if (!s) return null;
+  const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
 
@@ -471,4 +475,73 @@ export function toWeekly(rows, filterFn = () => true) {
     b.set(k, (b.get(k) || 0) + r.visits);
   }
   return [...b.entries()].map(([t, v]) => ({ t, v })).sort((a, b2) => (a.t < b2.t ? -1 : 1));
+}
+
+/* ------------------------------------------------------------------------- */
+/* Fifth slot: a weekly multi-metric export (walk-in / pre-booked / new       */
+/* patients / patients-per-hour by week). The generic long-format reader      */
+/* would keep only one numeric column, so this shape gets its own parser.     */
+/* ------------------------------------------------------------------------- */
+
+const KEY_CHWEEKLY = 'pmpeds.volumes.chweekly.v1';
+
+/**
+ * Parse "date column + several metric columns" — or return null if the
+ * workbook isn't that shape. Routing rule: at least two numeric metric
+ * columns, and at least one whose name says booking channel (walk/book).
+ */
+export function parseWeeklyMetrics(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  for (const name of wb.SheetNames) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+    for (let r = 0; r < Math.min(grid.length - 1, 12); r++) {
+      const hdr = grid[r] || [];
+      const next = grid[r + 1] || [];
+      const dateCol = hdr.findIndex((h, i) => typeof h === 'string' && toISO(next[i]));
+      if (dateCol < 0) continue;
+      const metricCols = hdr.map((h, i) => ({ h, i }))
+        .filter((x) => x.i !== dateCol && typeof x.h === 'string' && x.h.trim()
+                       && numOf(next[x.i]) !== null);
+      if (metricCols.length < 2) continue;
+      if (!metricCols.some((m) => /walk|book/i.test(m.h))) continue;
+      const rows = [];
+      for (let k = r + 1; k < grid.length; k++) {
+        const row = grid[k] || [];
+        const date = toISO(row[dateCol]);
+        if (!date) continue;               // Total row, footer, blanks
+        const rec = { date };
+        let got = 0;
+        for (const m of metricCols) {
+          const v = numOf(row[m.i]);
+          if (v !== null) { rec[m.h.trim()] = v; got++; }
+        }
+        // A row with a date but no metric values is prose that happened to
+        // contain a parseable date (a "Source: ... retrieved 8/18/2026"
+        // footer, say) — never data.
+        if (got > 0) rows.push(rec);
+      }
+      if (rows.length >= 8) {
+        return { layout: 'weekly-metrics', sheetName: name, data: rows,
+                 metrics: metricCols.map((m) => m.h.trim()),
+                 note: `${rows.length} weeks × ${metricCols.length} metrics` };
+      }
+    }
+  }
+  return null;
+}
+
+export function saveChannelWeekly(payload) {
+  try { localStorage.setItem(KEY_CHWEEKLY, JSON.stringify(payload)); } catch { /* quota */ }
+  return payload;
+}
+
+export function loadChannelWeekly() {
+  try {
+    const raw = localStorage.getItem(KEY_CHWEEKLY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearChannelWeekly() {
+  try { localStorage.removeItem(KEY_CHWEEKLY); } catch { /* ignore */ }
 }
