@@ -50,6 +50,33 @@ const cls = (v, flipAt = 0) => (v === null ? '' : v < flipAt ? 's-watch' : 's-ok
 const wkLabel = (t) => new Date(t + 'T00:00:00Z')
   .toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' });
 
+/**
+ * Same-week YoY datasets: a {t,v} series split by year and aligned on ISO
+ * week, prior years dashed and muted. The vertical gap between a solid line
+ * and its dashed twin IS the year-over-year change.
+ */
+function yoyDatasets(ser, color, name, dp = 1) {
+  const by = new Map();
+  for (const q of ser) {
+    const y = q.t.slice(0, 4);
+    if (!by.has(y)) by.set(y, new Map());
+    by.get(y).set(isoWeekOf(q.t), +q.v.toFixed(dp));
+  }
+  const wks = Array.from({ length: 52 }, (_, i) => i + 1);
+  const years = [...by.keys()].sort().slice(-2);
+  return {
+    labels: wks.map((w) => `w${w}`),
+    datasets: years.map((y, yi) => {
+      const m = by.get(y);
+      const prior = yi < years.length - 1;
+      return { label: `${name} ${y}`, data: wks.map((w) => m.get(w) ?? null),
+               borderColor: prior ? hexA(color, 0.55) : color,
+               borderDash: prior ? [4, 3] : undefined,
+               borderWidth: prior ? 1.4 : 2.2, backgroundColor: 'transparent' };
+    }),
+  };
+}
+
 export default function report(root) {
   const store = load();
   if (!store?.data?.length) {
@@ -347,9 +374,9 @@ export default function report(root) {
       <div class="grid g2">
         <div>
           <div class="chart-wrap"><canvas id="r-rate"></canvas></div>
-          <div class="note">The numerator counts coded diagnoses (any position); the denominator counts
-          visits by primary type. The two files carry different filters, so trend it, don't quote it as
-          a rate.${acuity.rateAvg ? ` Window averages: ${acuity.rateAvg.prv.toFixed(0)} →
+          <div class="note">Aligned by ISO week, one line per year — the gap between solid and dashed
+          is the YoY change. The numerator counts coded diagnoses (any position); the denominator counts
+          visits by primary type, so trend it, don't quote it as a rate.${acuity.rateAvg ? ` Window averages: ${acuity.rateAvg.prv.toFixed(0)} →
           ${acuity.rateAvg.cur.toFixed(0)} per 1,000.` : ''}</div>
         </div>
         <div>
@@ -443,6 +470,10 @@ export default function report(root) {
           'implied operating hours vs visit swing') : tile('New patients YoY',
           ch.yoNew ? fmtPct(ch.yoNew.pct) : '--', '', ch.yoNew ? cls(ch.yoNew.pct) : '')}
       </div>
+      ${ch.h2?.length ? `<div class="chart-wrap short" style="margin-bottom:6px"><canvas id="r-chpphr"></canvas></div>
+      <div class="note" style="margin-bottom:10px">${ch.roles.pphr}, aligned by ISO week — solid vs
+      dashed is the year-over-year productivity gap${ch.hours ? `; implied hours flex only
+      ${ch.hours.swing.toFixed(2)}× against the volume swing` : ''}.</div>` : ''}
       <div class="grid g2">
         <div>
           <div class="chart-wrap"><canvas id="r-chmix"></canvas></div>
@@ -591,13 +622,7 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
   if (acuity) {
     const rateC = document.getElementById('r-rate');
     if (rateC && acuity.rate.length) {
-      line(rateC, {
-        labels: acuity.rate.map((p) => wkLabel(p.t)),
-        datasets: [{ label: 'high-acuity per 1,000 visits',
-          data: acuity.rate.map((p) => +p.v.toFixed(1)),
-          borderColor: AMBER, backgroundColor: hexA(AMBER, 0.10), fill: true }],
-        options: { plugins: { legend: { display: false } } },
-      });
+      line(rateC, yoyDatasets(acuity.rate, AMBER, 'per 1,000'));
     }
     const fluC = document.getElementById('r-flu');
     if (fluC && acuity.fluSeasons) {
@@ -653,6 +678,10 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
         ],
         options: { scales: { y: { stacked: true }, x: { stacked: true } } },
       });
+    }
+    const ppC = document.getElementById('r-chpphr');
+    if (ppC && ch.h2?.length) {
+      line(ppC, yoyDatasets(ch.h2, '#a78bfa', 'patients/hr', 2));
     }
     const shC = document.getElementById('r-chshare');
     if (shC) {
