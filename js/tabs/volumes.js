@@ -19,6 +19,7 @@ import {
   saveChannel, loadChannel, clearChannel, toWeekly as volWeekly,
   looksLikeLocations, asLocationRows, saveLocations, loadLocations, clearLocations,
   parseWeeklyMetrics, saveChannelWeekly, loadChannelWeekly, clearChannelWeekly,
+  parseMasterWorkbook, saveMaster, clearMaster, loadDerived,
 } from '../volumes.js';
 import {
   trimPartialWeek, yoySameWeeks, windowYoY, seriesStats, concentration,
@@ -619,7 +620,8 @@ function privacyBar(store, acStore, chStore) {
                  acStore && `${acStore.fileName || 'acuity file'} (ICD)`,
                  chStore && `${chStore.fileName || 'channel file'} (totals)`,
                  locStore && `${locStore.fileName || 'location file'} (sites)`,
-                 loadChannelWeekly() && `${loadChannelWeekly().fileName || 'weekly metrics'} (channels/wk)`]
+                 loadChannelWeekly() && `${loadChannelWeekly().fileName || 'weekly metrics'} (channels/wk)`,
+                 loadDerived() && 'master workbook (all sheets)']
     .filter(Boolean).join(' + ');
   return `<section class="panel" style="border-color:#4ade80">
     <h2 style="color:#4ade80">Private — these files never left your browser
@@ -683,6 +685,16 @@ function wireUpload(root, ctx) {
     status.innerHTML = `reading ${file.name}…`;
     try {
       const buf = await file.arrayBuffer();
+      // The aggregated master workbook carries every dataset as its own sheet,
+      // so it is tried before any single-sheet reader can claim one of them.
+      const master = parseMasterWorkbook(buf);
+      if (master) {
+        const degraded = saveMaster(master, file.name);
+        status.innerHTML = `<strong class="s-ok">loaded the master workbook.</strong> ${master.note}`
+          + (degraded.length ? `<br><span class="s-watch">${degraded.join('; ')}</span>` : '');
+        setTimeout(rerender, 1200);
+        return;
+      }
       // The weekly multi-metric shape (several numeric columns per week) must be
       // tried first: the generic reader would keep one column and drop the rest.
       const wm = parseWeeklyMetrics(buf);

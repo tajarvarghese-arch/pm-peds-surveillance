@@ -545,3 +545,271 @@ export function loadChannelWeekly() {
 export function clearChannelWeekly() {
   try { localStorage.removeItem(KEY_CHWEEKLY); } catch { /* ignore */ }
 }
+
+/* ------------------------------------------------------------------------- */
+/* MASTER WORKBOOK                                                            */
+/*                                                                            */
+/* One aggregated workbook carrying every export as its own sheet, replacing  */
+/* the five-separate-files workflow. Detection is by sheet name, never by row */
+/* counts or column guesses: a workbook is "the master" only if it carries    */
+/* both the raw weekly diagnoses and the derived weekly series.               */
+/*                                                                            */
+/* Sheets land in the existing slots where one exists, so every tab keeps     */
+/* working unchanged, and in new slots where the data has no home yet.        */
+/* ------------------------------------------------------------------------- */
+
+const KEY_FUNNEL   = 'pmpeds.volumes.funnel.v1';
+const KEY_NEWPAT   = 'pmpeds.volumes.newpatients.v1';
+const KEY_SITEWK   = 'pmpeds.volumes.siteweekly.v1';
+const KEY_BHTELE   = 'pmpeds.volumes.bhtele.v1';
+const KEY_SITES    = 'pmpeds.volumes.sitemaster.v1';
+const KEY_DERIVED  = 'pmpeds.volumes.derived.v1';
+const KEY_REFTOT   = 'pmpeds.volumes.reftotals.v1';
+
+const MASTER_SHEETS = {
+  dx:       '01_Weekly_Diagnoses',
+  acuity:   '02_Weekly_HighAcuity',
+  channel:  '03_Weekly_Channel',
+  funnel:   '04_Weekly_Funnel_Regional',
+  locs:     '05_Monthly_Locations',
+  newpat:   '06_Monthly_NewPatients',
+  siteWk:   '07_Weekly_Site_Visits',
+  bhTele:   '08_Daily_BH_Telehealth',
+  sites:    '09_Site_Master',
+  refTot:   '10_Reference_Totals',
+  derived:  '11_Derived_Weekly',
+  siteMeta: '12_Site_Metadata',
+};
+
+/** Row 1 is a source banner and row 2 the header, so data starts on row 3. */
+function readMasterSheet(wb, name) {
+  if (!wb.SheetNames.includes(name)) return null;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null, range: 1 });
+  return rows.length ? rows : null;
+}
+
+/** Is this the aggregated master workbook rather than a single portal export? */
+export function looksLikeMaster(wb) {
+  return wb.SheetNames.includes(MASTER_SHEETS.dx)
+      && wb.SheetNames.includes(MASTER_SHEETS.derived);
+}
+
+/**
+ * Parse the master workbook into one payload per slot. Returns null when the
+ * workbook is not the master, so callers fall through to the single-file
+ * parsers.
+ */
+export function parseMasterWorkbook(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  if (!looksLikeMaster(wb)) return null;
+
+  const S = MASTER_SHEETS;
+  const out = { layout: 'master', sheets: [], counts: {} };
+  const note = (k, n) => { out.sheets.push(k); out.counts[k] = n; };
+
+  const dxRows = readMasterSheet(wb, S.dx);
+  if (dxRows) {
+    out.visits = dxRows.map((r) => ({
+      date: toISO(r.week), location: '(all)',
+      type: String(r.diagnosis_category ?? '').trim() || '(unspecified)',
+      category: String(r.seasonality_group ?? '').trim() || '(all)',
+      age: '(all)', visits: numOf(r.visits) ?? 0,
+    })).filter((r) => r.date);
+    note(S.dx, out.visits.length);
+  }
+
+  const acRows = readMasterSheet(wb, S.acuity);
+  if (acRows) {
+    out.acuity = acRows.map((r) => ({
+      date: toISO(r.week), location: '(all)',
+      type: String(r.icd_code ?? '').trim(),
+      category: String(r.clinical_grouping ?? '').trim() || '(all)',
+      age: '(all)', visits: numOf(r.diagnoses) ?? 0,
+    })).filter((r) => r.date && r.type);
+    note(S.acuity, out.acuity.length);
+  }
+
+  // The report's role-matcher keys off the portal's own column names, so emit
+  // those rather than this workbook's snake_case headers.
+  const chRows = readMasterSheet(wb, S.channel);
+  if (chRows) {
+    const M = { walk: 'Walk-In Visits', book: 'Pre-Booked Visits',
+                hour: 'Patients per Operating Hour', newp: 'New Patients By Patient ID' };
+    out.channelWeekly = {
+      layout: 'weekly-metrics', sheetName: S.channel,
+      metrics: [M.walk, M.book, M.hour, M.newp],
+      data: chRows.map((r) => {
+        const rec = { date: toISO(r.week) };
+        const put = (k, v) => { const n = numOf(v); if (n !== null) rec[k] = n; };
+        put(M.walk, r.walkin_visits); put(M.book, r.prebooked_visits);
+        put(M.hour, r.patients_per_operating_hour); put(M.newp, r.new_patients);
+        return rec;
+      }).filter((r) => r.date && Object.keys(r).length > 1),
+    };
+    note(S.channel, out.channelWeekly.data.length);
+  }
+
+  const locRows = readMasterSheet(wb, S.locs);
+  if (locRows) {
+    const cols = Object.keys(locRows[0]).filter((c) => c !== 'Location' && c !== 'Total' && toISO(c));
+    const long = [];
+    for (const r of locRows) {
+      const site = String(r.Location ?? '').trim();
+      if (!site || /^total$/i.test(site)) continue;
+      for (const c of cols) {
+        const v = numOf(r[c]);
+        if (v === null) continue;                     // blank = site not active
+        long.push({ date: toISO(c), location: site, type: '(all)',
+                    category: '(all)', age: '(all)', visits: v });
+      }
+    }
+    out.locations = long;
+    note(S.locs, long.length);
+  }
+
+  const simple = (sheet, map) => {
+    const rows = readMasterSheet(wb, sheet);
+    if (!rows) return null;
+    const mapped = rows.map(map).filter(Boolean);
+    note(sheet, mapped.length);
+    return mapped;
+  };
+
+  out.funnel = simple(S.funnel, (r) => {
+    const date = toISO(r.week);
+    if (!date || !r.region) return null;
+    return { date, region: String(r.region).trim(),
+      slots: numOf(r.available_slots), bookingRate: numOf(r.booking_rate),
+      prebooked: numOf(r.prebooked_visits), noShow: numOf(r.pct_no_show),
+      cancelled: numOf(r.pct_cancelled), lwbs: numOf(r.pct_left_without_being_seen),
+      toOtherPM: numOf(r.cancel_went_to_other_pm),
+      notOffered: numOf(r.cancel_service_not_offered),
+      nonPar: numOf(r.cancel_nonpar_or_inactive_insurance) };
+  });
+
+  out.newPatients = simple(S.newpat, (r) => {
+    const date = toISO(r.month);
+    if (!date) return null;
+    return { date, newPatients: numOf(r.new_patients_by_patient_id),
+             priorYear: numOf(r.prior_year_same_month), yoyPct: numOf(r.yoy_pct) };
+  });
+
+  out.siteWeekly = simple(S.siteWk, (r) => {
+    const date = toISO(r.week);
+    if (!date || !r.site) return null;
+    return { date, site: String(r.site).trim(),
+             cohort: String(r.growth_assumption ?? '').trim(), visits: numOf(r.visits) ?? 0 };
+  });
+
+  out.bhTele = simple(S.bhTele, (r) => {
+    const date = toISO(r.date);
+    if (!date) return null;
+    return { date, uc: numOf(r.urgent_care_visits),
+             tele: numOf(r.telemedicine_visits), bh: numOf(r.behavioral_health_visits) };
+  });
+
+  out.siteMaster = simple(S.sites, (r) => {
+    if (!r.site) return null;
+    return { site: String(r.site).trim(), state: String(r.state ?? '').trim(),
+      market: String(r.market_group ?? '').trim(),
+      tenure: numOf(r.tenure_years_at_jan_2026), v25: numOf(r.visits_jan_jul_2025),
+      yoy: numOf(r.yoy_pct_jan_jul),
+      grew: r.grew_2026 === true || String(r.grew_2026).toLowerCase() === 'true',
+      lat: numOf(r.lat), lon: numOf(r.lon) };
+  });
+
+  out.derived = simple(S.derived, (r) => {
+    const date = toISO(r.week);
+    if (!date) return null;
+    return { date, total: numOf(r.total_visits), seasonal: numOf(r.seasonal_visits),
+      nonSeasonal: numOf(r.non_seasonal_visits), injury: numOf(r.injury_visits),
+      uncategorized: numOf(r.uncategorized_visits),
+      infectious: numOf(r.infectious_visits), nonInfectious: numOf(r.non_infectious_visits),
+      acuity: numOf(r.high_acuity_diagnoses), acuityPer1000: numOf(r.high_acuity_per_1000_visits),
+      walkin: numOf(r.walkin_visits), prebooked: numOf(r.prebooked_visits),
+      newPatients: numOf(r.new_patients), pphr: numOf(r.patients_per_operating_hour) };
+  });
+
+  const refRows = readMasterSheet(wb, S.refTot);
+  if (refRows) {
+    out.refTotals = refRows
+      .map((r) => ({ metric: String(r.Metric ?? '').trim(), value: numOf(r.Value),
+                     window: String(r.Window ?? '').trim() }))
+      .filter((r) => r.metric && r.value !== null);
+    note(S.refTot, out.refTotals.length);
+  }
+
+  out.note = out.sheets.length + ' sheets: ' +
+    out.sheets.map((s) => s.replace(/^\d+_/, '') + ' ' + out.counts[s].toLocaleString()).join(', ');
+  return out;
+}
+
+/**
+ * Persist a parsed master workbook across the slots.
+ *
+ * localStorage is ~5MB and the site-week sheet alone is ~18k rows, so anything
+ * that will not fit is degraded to a coarser grain rather than dropped, and the
+ * degradation is reported back so the UI can say so.
+ */
+export function saveMaster(parsed, fileName) {
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const meta = { fileName, loadedAt: stamp, fromMaster: true };
+  const put = (key, payload) => {
+    try { localStorage.setItem(key, JSON.stringify(payload)); return true; }
+    catch { return false; }
+  };
+  const degraded = [];
+
+  if (parsed.visits) save({ ...meta, data: parsed.visits, layout: 'master',
+                            sheetName: MASTER_SHEETS.dx, rawRows: parsed.visits.length });
+  if (parsed.acuity) saveAcuity({ ...meta, data: parsed.acuity, layout: 'master',
+                                  sheetName: MASTER_SHEETS.acuity, rawRows: parsed.acuity.length });
+  if (parsed.channelWeekly) saveChannelWeekly({ ...parsed.channelWeekly, ...meta });
+  if (parsed.locations) saveLocations({ ...meta, data: parsed.locations, layout: 'master',
+                                        sheetName: MASTER_SHEETS.locs, rawRows: parsed.locations.length });
+
+  const slots = [
+    [KEY_FUNNEL, parsed.funnel], [KEY_NEWPAT, parsed.newPatients],
+    [KEY_BHTELE, parsed.bhTele], [KEY_SITES, parsed.siteMaster],
+    [KEY_DERIVED, parsed.derived], [KEY_REFTOT, parsed.refTotals],
+  ];
+  for (const [key, data] of slots) {
+    if (data && data.length) put(key, { ...meta, data });
+  }
+
+  if (parsed.siteWeekly && parsed.siteWeekly.length) {
+    if (!put(KEY_SITEWK, { ...meta, data: parsed.siteWeekly })) {
+      // Collapse weeks to months rather than lose the series entirely.
+      const agg = new Map();
+      for (const r of parsed.siteWeekly) {
+        const k = r.date.slice(0, 7) + '-01|' + r.site + '|' + r.cohort;
+        agg.set(k, (agg.get(k) || 0) + (r.visits || 0));
+      }
+      const monthly = [...agg.entries()].map(([k, visits]) => {
+        const [date, site, cohort] = k.split('|');
+        return { date, site, cohort, visits };
+      });
+      put(KEY_SITEWK, { ...meta, data: monthly,
+                        collapsed: 'weeks aggregated to months to fit browser storage' });
+      degraded.push('site visits collapsed to monthly');
+    }
+  }
+  return degraded;
+}
+
+function readSlot(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+export function loadFunnel()      { return readSlot(KEY_FUNNEL); }
+export function loadNewPatients() { return readSlot(KEY_NEWPAT); }
+export function loadSiteWeekly()  { return readSlot(KEY_SITEWK); }
+export function loadBhTele()      { return readSlot(KEY_BHTELE); }
+export function loadSiteMaster()  { return readSlot(KEY_SITES); }
+export function loadDerived()     { return readSlot(KEY_DERIVED); }
+export function loadRefTotals()   { return readSlot(KEY_REFTOT); }
+
+export function clearMaster() {
+  [KEY_FUNNEL, KEY_NEWPAT, KEY_SITEWK, KEY_BHTELE, KEY_SITES, KEY_DERIVED, KEY_REFTOT]
+    .forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+}

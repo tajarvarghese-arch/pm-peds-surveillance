@@ -15,6 +15,7 @@ import { panel, tile, empty } from '../ui.js';
 import { line, bar, scatter, hexA, heatColor } from '../charts.js';
 import {
   load, loadAcuity, loadChannel, loadLocations, loadChannelWeekly,
+  loadFunnel, loadNewPatients, loadBhTele, loadSiteMaster, loadDerived,
   toWeekly as volWeekly,
 } from '../volumes.js';
 import {
@@ -29,6 +30,7 @@ const AMBER = '#fbbf24';
 const RED = '#ef4444';
 const GREEN = '#4ade80';
 const DIM = '#7f8ea0';
+const PALETTE = ['#22d3ee', '#fbbf24', '#4ade80', '#a78bfa', '#f472b6', '#f97316'];
 
 // ICD-10 prefix → clinical grouping, for the acuity file. Clinical knowledge,
 // not data: which codes were exported stays private.
@@ -309,6 +311,119 @@ export default function report(root) {
     }
   }
 
+  /* ---- master-workbook datasets ----------------------------------------- */
+  // Each is optional: the master workbook supplies them, single-file loads do
+  // not, and every section below renders a locked state rather than throwing.
+  const funnelStore = loadFunnel();
+  const newPatStore = loadNewPatients();
+  const bhStore     = loadBhTele();
+  const siteStore   = loadSiteMaster();
+
+  let funnel = null;
+  if (funnelStore?.data?.length) {
+    const rows = funnelStore.data;
+    const byWeek = new Map();
+    for (const r of rows) {
+      if (!byWeek.has(r.date)) byWeek.set(r.date, []);
+      byWeek.get(r.date).push(r);
+    }
+    // Weight the rate columns by pre-booked volume: a small region must not
+    // swing the network average as hard as a large one.
+    const wavg = (arr, k) => {
+      let n = 0, d = 0;
+      for (const r of arr) { if (r[k] != null && r.prebooked) { n += r[k] * r.prebooked; d += r.prebooked; } }
+      return d ? (n / d) * 100 : null;
+    };
+    const weeks = [...byWeek.keys()].sort();
+    funnel = {
+      rate:   weeks.map((t) => ({ t, v: wavg(byWeek.get(t), 'bookingRate') })).filter((p) => p.v != null),
+      cancel: weeks.map((t) => ({ t, v: wavg(byWeek.get(t), 'cancelled') })).filter((p) => p.v != null),
+      noShow: weeks.map((t) => ({ t, v: wavg(byWeek.get(t), 'noShow') })).filter((p) => p.v != null),
+      regions: [],
+    };
+    const last = weeks.at(-1);
+    const byRegion = new Map();
+    for (const r of rows) {
+      if (!byRegion.has(r.region)) byRegion.set(r.region, []);
+      byRegion.get(r.region).push(r);
+    }
+    for (const [region, rs] of byRegion) {
+      const ser = rs.map((r) => ({ t: r.date, v: r.prebooked || 0 }))
+        .sort((a, b) => (a.t < b.t ? -1 : 1));
+      const yo = last ? pairedYoY(ser, last) : null;
+      if (yo) funnel.regions.push({ region, ...yo,
+        rate: wavg(rs.filter((r) => r.date.slice(0, 4) === String(yo.year)), 'bookingRate') });
+    }
+    funnel.regions.sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0));
+  }
+
+  let bh = null;
+  if (bhStore?.data?.length) {
+    const rows = bhStore.data;
+    const wk = (key) => {
+      const b = new Map();
+      for (const r of rows) {
+        if (r[key] == null) continue;
+        const d = new Date(r.date + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+        const k = d.toISOString().slice(0, 10);
+        b.set(k, (b.get(k) || 0) + r[key]);
+      }
+      return [...b.entries()].map(([t, v]) => ({ t, v })).sort((a, b2) => (a.t < b2.t ? -1 : 1));
+    };
+    const trimTail = (ser) => (ser.length > 2 ? ser.slice(0, -1) : ser);   // final week is partial
+    bh = { bh: trimTail(wk('bh')), tele: trimTail(wk('tele')), uc: trimTail(wk('uc')) };
+    const monthIndex = (ser) => {
+      const m = new Map();
+      for (const p of ser) {
+        const k = +p.t.slice(5, 7);
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(p.v);
+      }
+      const avg = [...m.entries()].map(([k, vs]) => [k, vs.reduce((a, b2) => a + b2, 0) / vs.length])
+        .sort((a, b2) => a[0] - b2[0]);
+      const mean = avg.reduce((a, x) => a + x[1], 0) / (avg.length || 1);
+      return avg.map(([k, v]) => ({ m: k, idx: mean ? Math.round(v / mean * 100) : null }));
+    };
+    bh.season = { bh: monthIndex(bh.bh), tele: monthIndex(bh.tele), uc: monthIndex(bh.uc) };
+  }
+
+  let acq = null;
+  if (newPatStore?.data?.length && weeklyAll.length) {
+    const byMonth = new Map();
+    for (const p of weeklyAll) {
+      const k = p.t.slice(0, 7);
+      byMonth.set(k, (byMonth.get(k) || 0) + p.v);
+    }
+    acq = newPatStore.data.map((r) => {
+      const k = r.date.slice(0, 7);
+      const tot = byMonth.get(k);
+      const prevK = `${+k.slice(0, 4) - 1}-${k.slice(5, 7)}`;
+      const prevTot = byMonth.get(prevK);
+      if (!tot || !prevTot || !r.priorYear) return null;
+      const est = tot - r.newPatients, estPrev = prevTot - r.priorYear;
+      return { m: k, newPct: (r.newPatients / r.priorYear - 1) * 100,
+               estPct: estPrev ? (est / estPrev - 1) * 100 : null,
+               share: r.newPatients / tot * 100 };
+    }).filter((x) => x && x.estPct != null);
+  }
+
+  let sites = null;
+  if (siteStore?.data?.length) {
+    const rows = siteStore.data.filter((r) => r.lat != null && r.lon != null);
+    const byMarket = new Map();
+    for (const r of rows) {
+      const k = r.market || 'other';
+      if (!byMarket.has(k)) byMarket.set(k, []);
+      byMarket.get(k).push(r);
+    }
+    sites = [...byMarket.entries()].map(([market, rs]) => ({
+      market, n: rs.length, grew: rs.filter((r) => r.grew).length,
+      med: rs.map((r) => r.yoy).sort((a, b) => a - b)[Math.floor(rs.length / 2)],
+      rows: rs,
+    })).sort((a, b) => b.n - a.n);
+  }
+
   /* ---- render ----------------------------------------------------------- */
   root.innerHTML = `
     <section class="panel" style="border-color:${ACCENT}">
@@ -499,6 +614,67 @@ export default function report(root) {
       week dimension on rows and load it on the Volumes tab — the weekly channel analysis unlocks
       automatically.</div>`) : ''}
 
+    ${funnel ? panel('Booking funnel by region',
+      `${funnel.rate.length} weeks · rates weighted by pre-booked volume`, `
+      <div class="grid g2">
+        <div>
+          <div class="chart-wrap"><canvas id="r-funnel"></canvas></div>
+          <div class="note">Booking rate, cancellations and no-shows as same-week year-over-year overlays
+          (solid = current year, dashed = prior). If the booking rate falls while the keep-rates hold or
+          improve, the loss is upstream of the booking — not a scheduling-operations problem.</div>
+        </div>
+        <div>
+          <div class="scroll-y"><table class="dt">
+            <thead><tr><th>Region</th><th>Pre-booked YoY</th><th>Booking rate</th></tr></thead>
+            <tbody>${funnel.regions.map((r) => `<tr>
+              <td>${r.region.length > 26 ? r.region.slice(0, 25) + '…' : r.region}</td>
+              <td class="num ${r.pct < 0 ? 's-watch' : 's-ok'}">${fmtPct(r.pct)}</td>
+              <td class="num" style="color:#7f8ea0">${r.rate != null ? r.rate.toFixed(1) + '%' : '--'}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+          <div class="note">Ranked worst to best on paired weeks. A decline that is universal across regions
+          points at demand or seasonality; one concentrated in a few markets points at something local.</div>
+        </div>
+      </div>`) : ''}
+
+    <div style="height:10px"></div>
+
+    ${bh ? panel('Behavioral health & telehealth', 'the two service lines outside urgent care', `
+      <div class="grid g2">
+        <div>
+          <div class="chart-wrap"><canvas id="r-bhtele"></canvas></div>
+          <div class="note">Weekly visits. These lines move for different reasons than urgent care and are
+          worth watching separately.</div>
+        </div>
+        <div>
+          <div class="chart-wrap"><canvas id="r-bhseason"></canvas></div>
+          <div class="note">Each line indexed to its own average month (100 = its own mean). Telehealth
+          typically runs <em>more</em> seasonal than urgent care — a respiratory triage channel, so it
+          amplifies the winter swing rather than diversifying it. Behavioral health follows its own ramp,
+          which with a short record cannot yet be separated from seasonality.</div>
+        </div>
+      </div>`) : ''}
+
+    <div style="height:10px"></div>
+
+    ${acq?.length ? panel('Acquisition: new vs established', 'monthly YoY, new patients against the returning book', `
+      <div class="chart-wrap"><canvas id="r-acq"></canvas></div>
+      <div class="note">Established = total visits minus new patients. Urgent care acquires families at the
+      moment of acute illness, so in a soft infectious season new-patient counts fall faster than repeat
+      visits — a gap between these two bars is expected, and only a <em>persistent</em> one after illness
+      normalises indicates an acquisition problem.</div>`) : ''}
+
+    <div style="height:10px"></div>
+
+    ${sites ? panel('Sites by market', `${sites.reduce((a, m) => a + m.n, 0)} same-store sites`, `
+      <div class="chart-wrap tall"><canvas id="r-sitemap"></canvas></div>
+      <div class="note">Each point is a site at its own coordinates; filled = grew year over year, hollow =
+      declined, size ∝ 2025 volume. Markets:
+      ${sites.map((m) => `<strong>${m.market}</strong> ${m.grew}/${m.n} grew (median ${fmtPct(m.med)})`).join(' · ')}.
+      Coordinates are city-level approximations for orientation, not address data.</div>`) : ''}
+
+    <div style="height:10px"></div>
+
     ${panel('What this data cannot tell you', 'read before quoting numbers upstream', `
       <ul style="margin:0 0 0 18px;font-size:11.5px;line-height:1.9;color:${DIM}">
         <li>The acuity numerator and the visit denominator count different things under different
@@ -512,7 +688,7 @@ export default function report(root) {
       </ul>`)}
   `;
 
-  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch });
+  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites });
 }
 
 /* ======================= sub-renderers =================================== */
@@ -565,7 +741,7 @@ function acuityTable(acuity) {
 
 /* ======================= charts ========================================== */
 
-function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch }) {
+function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites }) {
   const weeks = weeklyAll.map((p) => p.t);
   const labels = weeks.map(wkLabel);
 
@@ -715,6 +891,77 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
         });
       }
       line(shC, { labels: wks.map((w) => `w${w}`), datasets: ds });
+    }
+  }
+
+  // Master-workbook sections
+  if (funnel) {
+    const c = document.getElementById('r-funnel');
+    if (c) {
+      line(c, {
+        ...yoyDatasets(funnel.rate, ACCENT, 'booking rate'),
+        datasets: [...yoyDatasets(funnel.rate, ACCENT, 'booking rate').datasets,
+                   ...yoyDatasets(funnel.cancel, RED, 'cancelled').datasets,
+                   ...yoyDatasets(funnel.noShow, AMBER, 'no-show').datasets],
+      });
+    }
+  }
+  if (bh) {
+    const c = document.getElementById('r-bhtele');
+    if (c) {
+      const weeks = bh.bh.map((p) => p.t);
+      const m = (ser) => { const x = new Map(ser.map((p) => [p.t, p.v])); return weeks.map((w) => x.get(w) ?? null); };
+      line(c, { labels: weeks.map(wkLabel), datasets: [
+        { label: 'behavioral health', data: m(bh.bh), borderColor: GREEN, backgroundColor: 'transparent' },
+        { label: 'telehealth', data: m(bh.tele), borderColor: AMBER, backgroundColor: 'transparent' },
+      ] });
+    }
+    const c2 = document.getElementById('r-bhseason');
+    if (c2) {
+      const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [...new Set([...bh.season.uc, ...bh.season.bh, ...bh.season.tele].map((x) => x.m))]
+        .sort((a, b) => a - b);
+      const pick = (ser) => { const x = new Map(ser.map((p) => [p.m, p.idx])); return months.map((k) => x.get(k) ?? null); };
+      line(c2, { labels: months.map((k) => MON[k - 1]), datasets: [
+        { label: 'urgent care', data: pick(bh.season.uc), borderColor: ACCENT,
+          borderDash: [5, 3], borderWidth: 1.6, backgroundColor: 'transparent' },
+        { label: 'telehealth', data: pick(bh.season.tele), borderColor: AMBER, backgroundColor: 'transparent' },
+        { label: 'behavioral health', data: pick(bh.season.bh), borderColor: GREEN, backgroundColor: 'transparent' },
+      ] });
+    }
+  }
+  if (acq?.length) {
+    const c = document.getElementById('r-acq');
+    if (c) {
+      bar(c, { labels: acq.map((r) => r.m.slice(5) + '/' + r.m.slice(2, 4)), datasets: [
+        { label: 'new patients', data: acq.map((r) => +r.newPct.toFixed(1)), backgroundColor: hexA(AMBER, 0.85) },
+        { label: 'established visits', data: acq.map((r) => +r.estPct.toFixed(1)), backgroundColor: hexA(ACCENT, 0.85) },
+      ] });
+    }
+  }
+  if (sites) {
+    const c = document.getElementById('r-sitemap');
+    if (c) {
+      const maxV = Math.max(...sites.flatMap((m) => m.rows.map((r) => r.v25 || 0)), 1);
+      scatter(c, {
+        datasets: sites.map((m, i) => ({
+          label: `${m.market} (${m.grew}/${m.n})`,
+          data: m.rows.map((r) => ({ x: r.lon, y: r.lat, _s: r.site, _y: r.yoy, _t: r.tenure, _v: r.v25, _g: r.grew })),
+          backgroundColor: (x) => (x.raw?._g ? hexA(PALETTE[i % PALETTE.length], 0.85) : 'transparent'),
+          borderColor: PALETTE[i % PALETTE.length],
+          borderWidth: 1.5,
+          pointRadius: (x) => 3 + 7 * Math.sqrt((x.raw?._v || 0) / maxV),
+          pointHoverRadius: (x) => 5 + 7 * Math.sqrt((x.raw?._v || 0) / maxV),
+        })),
+        options: { plugins: { tooltip: { callbacks: {
+          title: (it) => it[0]?.raw?._s || '',
+          label: (it) => ` YoY ${fmtPct(it.raw._y)} · ${it.raw._t != null ? it.raw._t + 'y old · ' : ''}${fmtN(it.raw._v)} visits`,
+        } } },
+        scales: { x: { title: { display: true, text: 'longitude →', color: DIM,
+                                font: { family: 'monospace', size: 10 } } },
+                  y: { title: { display: true, text: 'latitude', color: DIM,
+                                font: { family: 'monospace', size: 10 } } } } },
+      });
     }
   }
 

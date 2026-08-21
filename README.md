@@ -320,6 +320,17 @@ by-location monthly export, and the channel totals — and it produces:
   slot), the tab splits YoY change by booking channel, tests whether surge
   weeks skew walk-in or pre-booked, and measures how much operating hours
   actually flex against the volume swing.
+- **Booking funnel by region** (master workbook) — booking rate against
+  cancellation and no-show rates as same-week YoY overlays, separating a demand
+  problem upstream of the booking from a scheduling-operations one, plus a
+  per-region ranking of pre-booked change.
+- **Behavioral health & telehealth** (master workbook) — weekly volumes and a
+  seasonality index; telehealth typically tracks and amplifies the respiratory
+  wave rather than diversifying it.
+- **Acquisition** (master workbook) — new patients against the established book
+  (total minus new), monthly year over year.
+- **Sites by market** (master workbook) — every same-store site plotted by its
+  coordinates, filled where it grew, sized by volume.
 
 ## Layout
 
@@ -329,12 +340,13 @@ css/terminal.css      brutalist dark theme
 js/config.js          markets, palette, thresholds, documented gaps
 js/data.js            snapshot loader + live CDC fallback + freshness probe
 js/derive.js          d1/d2, percentiles, seasonal bands, forecast, staffing
-js/volumes.js         browser-only ingest of confidential exports (5 slots)
+js/volumes.js         browser-only ingest: master workbook + 5 single-file slots
 js/analysis.js        pure computations for the Volumes + Report tabs
 js/charts.js          Chart.js theming, sparklines, heat ramp
 js/tabs/*.js          tabs (exec, pathogens, historical, forecast, geo,
                       wastewater, why, market, staffing, volumes, report)
 scripts/fetch_data.py CDC -> data/*.json
+scripts/make_synthetic_master.py  synthetic master workbook for loader tests
 scripts/archive_history.py  accumulates the snapshot-only dataset
 ```
 
