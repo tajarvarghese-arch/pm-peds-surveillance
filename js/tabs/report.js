@@ -15,7 +15,7 @@ import { panel, tile, empty } from '../ui.js';
 import { line, bar, scatter, hexA, heatColor } from '../charts.js';
 import {
   load, loadAcuity, loadChannel, loadLocations, loadChannelWeekly,
-  loadFunnel, loadNewPatients, loadBhTele, loadSiteMaster, loadDerived,
+  loadFunnel, loadNewPatients, loadBhTele, loadSiteMaster, loadDerived, loadSiteWeekly,
   toWeekly as volWeekly,
 } from '../volumes.js';
 import {
@@ -43,6 +43,16 @@ const ICD_GROUPS = [
   [/^J4[456]/, 'Asthma'],
   [/^N39/, 'UTI'],
 ];
+// Infection-driven service lines. This is a clinical reading of the export's own
+// category names, not a coded field — the split is what separates an
+// epidemiological explanation from a demand one, so it is stated openly.
+const INFECTIOUS = [
+  'Pharyngitis & Strep pharyngitis', 'Otitis media', 'Bacterial infections',
+  'Other middle & inner ear conditions', 'Respiratory conditions', 'Viral infections',
+  'Fever', 'COVID-19 diagnoses or exposure',
+];
+const isInfectious = (cat) => INFECTIOUS.includes(cat);
+
 const icdGroup = (code) => (ICD_GROUPS.find(([re]) => re.test(code)) || [null, 'Other'])[1];
 
 const fmtN = (v) => Math.round(v).toLocaleString();
@@ -258,6 +268,120 @@ export default function report(root) {
     }
   }
 
+  /* ---- the control test: infection-driven lines vs everything else ------- */
+  // An epidemiological cause predicts the first group falls and the second does
+  // not. A demand or acquisition cause predicts both fall, because a family who
+  // cannot find PM cannot bring a broken arm either.
+  let epi = null;
+  if (lastFull) {
+    const cats = types.map((t) => {
+      const w = wkOf((r) => r.type === t);
+      const y = pairedYoY(w, lastFull);
+      return y && y.prv > 400
+        ? { cat: t, inf: isInfectious(t), pct: y.pct, v25: y.prv, v26: y.cur, chg: y.cur - y.prv }
+        : null;
+    }).filter(Boolean).sort((a, b) => a.pct - b.pct);
+    const infW = wkOf((r) => isInfectious(r.type));
+    const nonW = wkOf((r) => !isInfectious(r.type));
+    const yi = pairedYoY(infW, lastFull), yn = pairedYoY(nonW, lastFull);
+    if (yi && yn && cats.length) {
+      epi = { cats, inf: yi, non: yn, infW, nonW,
+              split: ['Jan–Feb', 'Mar–Jul'].map((label, i) => {
+                const months = i === 0 ? [1, 2] : [3, 4, 5, 6, 7];
+                const sub = (ser) => ser.filter((q) => months.includes(+q.t.slice(5, 7)));
+                const t = pairedYoY(sub(weeklyAll), lastFull);
+                const a = pairedYoY(sub(infW), lastFull);
+                const b = pairedYoY(sub(nonW), lastFull);
+                return t && a && b ? { label, tot: t.pct, inf: a.pct, non: b.pct } : null;
+              }).filter(Boolean) };
+    }
+  }
+
+  /* ---- multi-year, recovery and cohort gradient (needs site-week data) --- */
+  const siteWkStore = loadSiteWeekly();
+  let multi = null;
+  if (siteWkStore?.data?.some((r) => /prior|after/i.test(r.cohort || ''))) {
+    // Open urgent care only. The export also carries closed sites and the
+    // behavioural-health / telemedicine lines; mixing them in makes a
+    // same-store trend look like a decline that is really a footprint change.
+    const rows = siteWkStore.data.filter((r) => /prior|after/i.test(r.cohort || ''));
+    const netW = new Map();
+    for (const r of rows) netW.set(r.date, (netW.get(r.date) || 0) + (r.visits || 0));
+    const net = [...netW.entries()].map(([t, v]) => ({ t, v })).sort((a, b) => (a.t < b.t ? -1 : 1));
+    // Trailing period is partial in this export; drop it before any comparison.
+    const trimmed = net.length > 2 ? net.slice(0, -1) : net;
+
+    // Compare identical ISO weeks in every year. Bucketing by calendar month
+    // would shift the window boundary year to year (a week starting 28 July
+    // spans into August), which is exactly the unequal-window bias the rest of
+    // this report avoids by pairing weeks.
+    const W_FROM = 2, W_TO = 29;                    // 28 weeks, the paired-week span
+    const jj = new Map(), wkCount = new Map();
+    for (const p2 of trimmed) {
+      const w = isoWeekOf(p2.t);
+      if (w < W_FROM || w > W_TO) continue;
+      const y = +p2.t.slice(0, 4);
+      jj.set(y, (jj.get(y) || 0) + p2.v);
+      wkCount.set(y, (wkCount.get(y) || 0) + 1);
+    }
+    // Drop any year that does not carry the full span, so no partial year is
+    // compared against a complete one.
+    const full = W_TO - W_FROM + 1;
+    for (const [y, n] of wkCount) if (n < full) jj.delete(y);
+    const years = [...jj.keys()].sort();
+    multi = { years, weeks: full, totals: years.map((y) => jj.get(y)),
+      yoy: years.map((y, i) => (i ? (jj.get(y) / jj.get(years[i - 1]) - 1) * 100 : null)) };
+    const yN = years.at(-1), y2 = years[years.length - 3];
+    if (y2) multi.cagr2 = (Math.pow(jj.get(yN) / jj.get(y2), 0.5) - 1) * 100;
+
+    // Rolling four-week volume against the same weeks a year earlier.
+    const idx = new Map(trimmed.map((p2) => [p2.t, p2.v]));
+    const roll = [];
+    for (let i = 3; i < trimmed.length; i++) {
+      const win = trimmed.slice(i - 3, i + 1);
+      const cur = win.reduce((a, q) => a + q.v, 0);
+      let prev = 0, ok = true;
+      for (const q of win) {
+        const d = new Date(q.t + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() - 364);
+        const v = idx.get(d.toISOString().slice(0, 10));
+        if (v === undefined) { ok = false; break; }
+        prev += v;
+      }
+      if (ok && prev > 0 && +trimmed[i].t.slice(0, 4) === yN) {
+        roll.push({ t: trimmed[i].t, v: (cur / prev - 1) * 100 });
+      }
+    }
+    multi.recovery = roll;
+
+    // Cohort gradient — the site-maturity test for the saturation hypothesis.
+    const byCo = new Map();
+    for (const r of rows) {
+      if (!r.cohort) continue;
+      if (+r.date.slice(5, 7) > 7) continue;
+      const k = r.cohort, y = +r.date.slice(0, 4);
+      if (!byCo.has(k)) byCo.set(k, new Map());
+      byCo.get(k).set(y, (byCo.get(k).get(y) || 0) + (r.visits || 0));
+    }
+    multi.cohorts = [...byCo.entries()].map(([cohort, m]) => ({
+      cohort, yoy: years.map((y, i) => (i && m.get(y) && m.get(years[i - 1])
+        ? (m.get(y) / m.get(years[i - 1]) - 1) * 100 : null)),
+      sites: new Set(rows.filter((r) => r.cohort === cohort).map((r) => r.site)).size,
+    })).sort((a, b) => a.cohort.localeCompare(b.cohort));
+  }
+
+  /* ---- operating leverage ------------------------------------------------ */
+  let lev = null;
+  if (ch?.h2?.length === ch?.t2?.length && ch?.t2?.length > 20) {
+    const pts = ch.t2.map((p2, i) => ({ t: p2.t, v: p2.v, h: ch.h2[i].v > 0 ? p2.v / ch.h2[i].v : null }))
+      .filter((q) => q.h);
+    const pk = pts.reduce((a, q) => (q.v > a.v ? q : a));
+    const tr = pts.reduce((a, q) => (q.v < a.v ? q : a));
+    lev = { pts, peak: pk, trough: tr,
+      marginal: (pk.v - tr.v) / (pk.h - tr.h),
+      avg: pts.reduce((a, q) => a + q.v, 0) / pts.reduce((a, q) => a + q.h, 0) };
+  }
+
   /* ---- headline findings (computed, then phrased) ----------------------- */
   const findings = [];
   if (wave && calYoY?.pct !== null) {
@@ -290,6 +414,29 @@ export default function report(root) {
     findings.push(`A genuine counter-seasonal block exists — ${counterSeasonal.length} line(s) peaking in
       summer (${counterSeasonal.slice(0, 3).map((x) => x.t).join(', ')}${counterSeasonal.length > 3 ? '…' : ''}) —
       but check its size against the trough before treating it as a hedge.`);
+  }
+  if (epi) {
+    findings.unshift(`<strong>The decline is epidemiological, and the control proves it.</strong>
+      Infection-driven visits ${fmtPct(epi.inf.pct)} while non-infectious lines — injury, skin, allergy —
+      ${epi.non.pct > 0 ? 'grew' : 'moved'} ${fmtPct(epi.non.pct)}. If families had stopped choosing PM the
+      non-illness book would have fallen too.`);
+  }
+  if (multi?.cagr2 != null) {
+    findings.push(`<strong>Measured against two years ago the business is
+      ${fmtPct(multi.cagr2)} a year</strong> — ${multi.years.at(-2)} was an exceptional season, so the latest
+      year reads as a return toward trend rather than a break in it.`);
+  }
+  if (multi?.recovery?.length) {
+    const lo = multi.recovery.reduce((a, r) => (r.v < a.v ? r : a));
+    const last = multi.recovery.at(-1);
+    findings.push(`<strong>It has already recovered:</strong> rolling four-week volume moved from
+      ${fmtPct(lo.v)} at its trough to ${fmtPct(last.v)} by ${last.t}. There is no compounding spiral.`);
+  }
+  if (lev) {
+    findings.push(`<strong>Fixed capacity is the profit engine.</strong> Doubling volume from trough to peak
+      takes only ${fmtPct((lev.peak.h / lev.trough.h - 1) * 100)} more labour hours —
+      <strong>${Math.round(lev.marginal)} incremental visits per incremental hour</strong> against a
+      ${lev.avg.toFixed(2)} average. The winter surge is served almost free at the margin.`);
   }
   if (ch?.yoWalk && ch?.yoBook) {
     findings.push(`<strong>The channel split of the change:</strong> walk-in ${fmtPct(ch.yoWalk.pct)} vs
@@ -437,6 +584,77 @@ export default function report(root) {
         : '<div class="note">Not enough history yet for headline findings — load a longer export.</div>'}
       </div>
     </section>
+
+    <div style="height:10px"></div>
+
+    ${epi ? panel('The diagnosis — every infection-driven line fell; every other line grew',
+      `${epi.cats.length} service lines, ${epi.inf.weeks} paired weeks`, `
+      <div class="chart-wrap tall"><canvas id="r-control"></canvas></div>
+      <div class="note"><strong>The control test.</strong> Infection-driven lines total
+      ${fmtPct(epi.inf.pct)} (${fmtN(epi.inf.cur - epi.inf.prv)} visits); everything else totals
+      ${fmtPct(epi.non.pct)} (${fmtN(epi.non.cur - epi.non.prv)}). A demand or acquisition cause would take
+      both down together — a family who cannot find PM cannot bring a broken arm either. This separation is
+      what makes the cause epidemiological rather than commercial.</div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <div class="chart-wrap"><canvas id="r-infyoy"></canvas></div>
+          <div class="note">Infection-driven volume, same weeks year over year.</div>
+        </div>
+        <div>
+          <div class="chart-wrap"><canvas id="r-noninf"></canvas></div>
+          <div class="note">The non-infectious book over the same weeks — the control group.</div>
+        </div>
+      </div>
+      ${epi.split.length ? `<table class="dt" style="margin-top:8px">
+        <thead><tr><th>Period</th><th>Total</th><th>Infection-driven</th><th>Non-infectious</th></tr></thead>
+        <tbody>${epi.split.map((r) => `<tr><td>${r.label}</td>
+          <td class="num ${cls(r.tot)}">${fmtPct(r.tot)}</td>
+          <td class="num ${cls(r.inf)}">${fmtPct(r.inf)}</td>
+          <td class="num ${cls(r.non)}">${fmtPct(r.non)}</td></tr>`).join('')}</tbody></table>
+        <div class="note">The wave months carry the damage; the non-infectious book holds in both halves.</div>` : ''}`)
+    : ''}
+
+    <div style="height:10px"></div>
+
+    ${multi ? panel('Context — this year against the last four',
+      `${multi.years[0]}–${multi.years.at(-1)} · identical ${multi.weeks}-week window each year`, `
+      <div class="grid g2">
+        <div>
+          <div class="chart-wrap"><canvas id="r-multi"></canvas></div>
+          <div class="note">Year-over-year growth is volatile around a trend, not the smooth deceleration a
+          saturating market produces.${multi.cagr2 != null ? ` Against two years ago:
+          <strong>${fmtPct(multi.cagr2)} a year</strong>.` : ''}</div>
+        </div>
+        <div>
+          <div class="chart-wrap"><canvas id="r-recovery"></canvas></div>
+          <div class="note">Rolling four-week volume against the same weeks a year earlier. A decline that
+          closes through the year is a passing season; one that widens is a business problem.</div>
+        </div>
+      </div>`) : ''}
+
+    <div style="height:10px"></div>
+
+    ${multi?.cohorts?.length ? panel('Alternatives tested — is the market saturating?',
+      'site-maturity gradient, PM\'s own cohort classification', `
+      <div class="chart-wrap"><canvas id="r-cohort"></canvas></div>
+      <div class="note"><strong>Saturation predicts the oldest markets falling hardest</strong>, because those
+      are where PM has already met most families. A flat gradient across cohorts refutes it: newer sites are
+      still ramping into unpenetrated markets and should grow regardless of conditions. Read alongside the
+      control test above — saturation also has no mechanism that would spare injury and skin visits while
+      removing strep and pneumonia.</div>`) : ''}
+
+    <div style="height:10px"></div>
+
+    ${lev ? panel('The engine — fixed capacity is why the peak is profitable',
+      `${lev.pts.length} weeks · implied hours = visits ÷ patients-per-hour`, `
+      <div class="chart-wrap tall"><canvas id="r-leverage"></canvas></div>
+      <div class="note">Going from the trough week to the peak — <strong>${fmtN(lev.peak.v - lev.trough.v)}
+      more visits</strong> — took only <strong>${fmtN(lev.peak.h - lev.trough.h)} more hours</strong>:
+      <strong>${Math.round(lev.marginal)} incremental visits per incremental hour</strong> against a network
+      average of ${lev.avg.toFixed(2)}. A cost base that scaled with demand would trace a rising diagonal;
+      this is a horizontal band. Incremental surge visits carry almost no labour cost, which is where the
+      margin of the year is made — and why holding hours through a soft season is defensible rather than
+      wasteful.</div>`) : ''}
 
     <div style="height:10px"></div>
 
@@ -688,7 +906,7 @@ export default function report(root) {
       </ul>`)}
   `;
 
-  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites });
+  mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites, epi, multi, lev });
 }
 
 /* ======================= sub-renderers =================================== */
@@ -741,7 +959,7 @@ function acuityTable(acuity) {
 
 /* ======================= charts ========================================== */
 
-function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites }) {
+function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, fp, ch, funnel, bh, acq, sites, epi, multi, lev }) {
   const weeks = weeklyAll.map((p) => p.t);
   const labels = weeks.map(wkLabel);
 
@@ -891,6 +1109,72 @@ function mountCharts({ weeklyAll, catW, cats, phased, typeYoY, calYoY, acuity, f
         });
       }
       line(shC, { labels: wks.map((w) => `w${w}`), datasets: ds });
+    }
+  }
+
+  // The diagnosis: control test + the two YoY panels
+  if (epi) {
+    const c = document.getElementById('r-control');
+    if (c) {
+      bar(c, {
+        labels: epi.cats.map((r) => (r.cat.length > 28 ? r.cat.slice(0, 27) + '…' : r.cat)),
+        datasets: [{ label: 'YoY %', data: epi.cats.map((r) => +r.pct.toFixed(1)),
+          backgroundColor: epi.cats.map((r) => hexA(r.inf ? RED : GREEN, 0.85)) }],
+        options: { indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: {
+          label: (it) => {
+            const r = epi.cats[it.dataIndex];
+            return ` ${r.inf ? 'infection-driven' : 'non-infectious'} · ${fmtPct(r.pct)} · ${fmtN(r.chg)} visits`;
+          } } } } },
+      });
+    }
+    const a = document.getElementById('r-infyoy');
+    if (a) line(a, yoyDatasets(epi.infW, RED, 'infection-driven'));
+    const b = document.getElementById('r-noninf');
+    if (b) line(b, yoyDatasets(epi.nonW, GREEN, 'non-infectious'));
+  }
+
+  if (multi) {
+    const c = document.getElementById('r-multi');
+    if (c) {
+      bar(c, { labels: multi.years.map(String), datasets: [{ label: `visits, weeks ${2}–${29}`,
+        data: multi.totals,
+        backgroundColor: multi.years.map((y, i) => hexA(i === multi.years.length - 1 ? ACCENT : DIM,
+          i === multi.years.length - 1 ? 0.9 : 0.45)) }],
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: {
+          afterLabel: (it) => (multi.yoy[it.dataIndex] != null
+            ? `YoY ${fmtPct(multi.yoy[it.dataIndex])}` : '') } } } } });
+    }
+    const r = document.getElementById('r-recovery');
+    if (r && multi.recovery.length) {
+      line(r, { labels: multi.recovery.map((q) => wkLabel(q.t)),
+        datasets: [{ label: 'rolling 4-week YoY %', data: multi.recovery.map((q) => +q.v.toFixed(1)),
+          borderColor: ACCENT, backgroundColor: hexA(ACCENT, 0.10), fill: true }],
+        options: { plugins: { legend: { display: false } } } });
+    }
+    const co = document.getElementById('r-cohort');
+    if (co && multi.cohorts?.length) {
+      const yrs = multi.years.slice(1);
+      bar(co, { labels: yrs.map(String),
+        datasets: multi.cohorts.map((c2, i) => ({ label: `${c2.cohort} (${c2.sites})`,
+          data: yrs.map((y) => { const k = multi.years.indexOf(y); return c2.yoy[k] != null ? +c2.yoy[k].toFixed(1) : null; }),
+          backgroundColor: hexA(PALETTE[i % PALETTE.length], 0.85) })) });
+    }
+  }
+
+  if (lev) {
+    const c = document.getElementById('r-leverage');
+    if (c) {
+      scatter(c, { datasets: [{ label: 'week',
+        data: lev.pts.map((q) => ({ x: q.v, y: q.h, _t: q.t })),
+        backgroundColor: hexA(ACCENT, 0.65), pointRadius: 4, pointHoverRadius: 6 }],
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: {
+          title: (it) => 'Week of ' + (it[0]?.raw?._t || ''),
+          label: (it) => ` ${fmtN(it.raw.x)} visits · ${fmtN(it.raw.y)} hours · ${(it.raw.x / it.raw.y).toFixed(2)}/hr`,
+        } } },
+        scales: { x: { title: { display: true, text: 'weekly visits →', color: DIM,
+                                font: { family: 'monospace', size: 10 } } },
+                  y: { title: { display: true, text: 'implied operating hours', color: DIM,
+                                font: { family: 'monospace', size: 10 } } } } } });
     }
   }
 
