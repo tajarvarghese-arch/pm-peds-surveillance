@@ -19,6 +19,79 @@ import { pressureIndex, seasonOf } from '../derive.js';
 import { isoWeekOf } from '../analysis.js';
 
 const YEAR_COLORS = ['#64748b', '#94a3b8', '#fbbf24', '#22d3ee', '#a78bfa'];
+const COMP_COLORS = { 'COVID-19': '#22d3ee', Influenza: '#fbbf24', RSV: '#4ade80' };
+
+/**
+ * One window's explanation: pathogen contribution bars plus a sentence
+ * assembled strictly from the computed deltas. Deliberately conservative -- it
+ * names drivers and offsets by size, flags the "weak only against last year"
+ * case, and when the secondary viruses run at typical levels it says the
+ * deviation is specific to the index's pathogens, not illness in general.
+ */
+function explainCard(w, Y) {
+  const comps = w.comps.filter((c) => c.delta !== null);
+  if (!comps.length) return '';
+  const maxAbs = Math.max(...comps.map((c) => Math.abs(c.delta)), 0.001);
+  const up = comps.filter((c) => c.delta > 0).sort((a, b) => b.delta - a.delta);
+  const down = comps.filter((c) => c.delta < 0).sort((a, b) => a.delta - b.delta);
+
+  const nice = (k) => (k === 'COVID-19' ? 'COVID' : k === 'Influenza' ? 'flu' : k);
+  const pts = (v) => (v > 0 ? '+' : '') + v.toFixed(1) + ' pts';
+  const pcts = (c) => (c.med > 0.5
+    ? ' (' + (c.delta > 0 ? '+' : '') + (100 * c.delta / c.med).toFixed(0) + '% vs typical)' : '');
+
+  let sentence = '';
+  if (w.recHigh) {
+    sentence = 'Record high driven by '
+      + up.map((c) => '<strong>' + nice(c.k) + '</strong> ' + pts(c.delta) + pcts(c)).join(' and ')
+      + (down.length ? ', despite ' + down.map((c) => nice(c.k) + ' ' + pts(c.delta)).join(' and ') : '')
+      + '.';
+  } else if (w.recLow) {
+    const lead = down[0];
+    const share = w.totDelta < 0 && lead ? Math.round(100 * lead.delta / w.totDelta) : null;
+    sentence = 'Record low driven by '
+      + down.map((c) => '<strong>' + nice(c.k) + '</strong> ' + pts(c.delta) + pcts(c)).join(' and ')
+      + (share && share >= 55 ? ' — ' + nice(lead.k) + ' alone accounts for ~' + share + '% of the shortfall' : '')
+      + (up.length ? '; ' + up.map((c) => nice(c.k) + ' ' + pts(c.delta)).join(' and ') + ' partially offset' : '')
+      + '.';
+    if (w.secs.length >= 3 && w.secsAtOrAbove >= w.secs.length - 1) {
+      sentence += ' Secondary viruses (' + w.secs.map((x) => x.k).join(', ') + ') are running at or '
+        + 'above typical levels, so this is not a general disappearance of illness — it is specific '
+        + 'to the pathogens above, chiefly the absent summer ' + nice(down[0].k) + ' wave.';
+    }
+  } else {
+    const vsLastTot = comps.reduce((a, c) => a + c.deltaLast, 0);
+    if (w.totDelta > 0 && vsLastTot < 0) {
+      const worst = [...comps].sort((a, b) => a.deltaLast - b.deltaLast)[0];
+      sentence = 'Above the typical year (' + pts(w.totDelta) + ' vs prior median — '
+        + comps.map((c) => nice(c.k) + ' ' + pts(c.delta)).join(', ')
+        + '), and reads weak only against ' + (Y - 1) + ', whose ' + nice(worst.k)
+        + ' block was the largest on record (' + nice(worst.k) + ' ' + pts(worst.deltaLast)
+        + ' vs ' + (Y - 1) + ').';
+    } else {
+      sentence = comps.map((c) => nice(c.k) + ' ' + pts(c.delta) + pcts(c)).join(' · ')
+        + ' vs the typical prior year.';
+    }
+  }
+
+  const bars = comps.map((c) => {
+    const wpct = (Math.abs(c.delta) / maxAbs * 100).toFixed(0);
+    const col = COMP_COLORS[c.k] || '#94a3b8';
+    return '<div style="display:grid;grid-template-columns:64px 1fr 74px;gap:8px;align-items:center">'
+      + '<span style="font-size:10px;color:' + col + '">' + nice(c.k) + '</span>'
+      + '<div style="display:flex;' + (c.delta < 0 ? 'justify-content:flex-end' : '') + '">'
+      + '<div style="height:9px;width:' + wpct + '%;background:'
+      + (c.delta < 0 ? 'rgba(239,68,68,0.8)' : col) + ';min-width:2px"></div></div>'
+      + '<span class="num" style="font-size:10px;color:#7f8ea0">' + pts(c.delta) + '</span></div>';
+  }).join('');
+
+  return '<div style="border:1px solid var(--line);margin-top:8px;padding:8px 10px">'
+    + '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
+    + '<strong style="font-size:11.5px">' + w.name + '</strong>'
+    + '<span style="font-size:10px;color:#4b5a6b">contribution vs prior-year median, index points</span></div>'
+    + '<div style="display:grid;gap:3px;margin:6px 0">' + bars + '</div>'
+    + '<div class="note" style="margin-top:2px">' + sentence + '</div></div>';
+}
 
 /** ISO year (the year of the week's Thursday) — must pair with isoWeekOf. */
 function isoYearOf(dateStr) {
@@ -98,6 +171,50 @@ export default function yearTab(root, ctx) {
     return { ...win, per, cur: cur?.cum ?? 0,
       recLow: others.length && cur.cum < Math.min(...others),
       recHigh: others.length && cur.cum > Math.max(...others) };
+  });
+
+  // ---- per-window pathogen decomposition ---------------------------------
+  // The index's "Combined" is CDC's rollup of COVID + influenza + RSV, so each
+  // window's deviation can be attributed component by component: the same
+  // weighted index, computed per pathogen, per window, per year.
+  const compSeries = ['COVID-19', 'Influenza', 'RSV'].map((k) => ({
+    k, pts: pressureIndex(ctx.db.ed_age?.data || [], k, ctx.mix)
+      .map((p) => ({ v: p.v, y: isoYearOf(p.t), w: isoWeekOf(p.t) })),
+  }));
+  const naatRows = ctx.db.naat_multi?.data || [];
+  const secKeys = ['PIV', 'HMPV', 'RV/EV', 'Adenovirus'];
+  const secPts = secKeys.map((k) => ({
+    k, pts: naatRows.map((r) => ({ v: r['Region 2|' + k], t: r.week }))
+      .filter((p) => p.v != null)
+      .map((p) => ({ v: p.v, y: isoYearOf(p.t), w: isoWeekOf(p.t) })),
+  }));
+  const medianOf = (a) => {
+    const s2 = [...a].sort((x, y2) => x - y2);
+    return s2.length ? s2[Math.floor((s2.length - 1) / 2)] : null;
+  };
+
+  const windowExplain = windows.map((win) => {
+    const comps = compSeries.map(({ k, pts: cp }) => {
+      const cum = (y) => cp.filter((p) => p.y === y && p.w >= win.lo && p.w <= win.hi)
+        .reduce((a, p) => a + p.v, 0);
+      const cur = cum(Y);
+      const med = medianOf(priors.map(cum));
+      const lastY = cum(Y - 1);
+      return { k, cur, med, lastY, delta: med !== null ? cur - med : null,
+               deltaLast: cur - lastY };
+    });
+    const totDelta = comps.reduce((a, c) => a + (c.delta ?? 0), 0);
+    const secs = secPts.map(({ k, pts: sp }) => {
+      const mean = (y) => {
+        const vs = sp.filter((p) => p.y === y && p.w >= win.lo && p.w <= win.hi).map((p) => p.v);
+        return vs.length > 2 ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+      };
+      const cur = mean(Y);
+      const med = medianOf(priors.map(mean).filter((v) => v !== null));
+      return { k, cur, med };
+    }).filter((x) => x.cur !== null && x.med !== null);
+    const secsAtOrAbove = secs.filter((x) => x.cur >= x.med * 0.9).length;
+    return { ...win, comps, totDelta, secs, secsAtOrAbove };
   });
 
   // pathogen YTD means, matched weeks
@@ -210,7 +327,8 @@ export default function yearTab(root, ctx) {
         </table>
         <div class="note">The same year can hold a record-high window and a record-low window. For
         planning, the window verdicts matter more than the annual total — staffing is set by week,
-        not by year.</div>`)}
+        not by year.</div>
+        ${windowExplain.map((w) => explainCard(w, Y)).join('')}`)}
 
       ${panel('Pathogen mix — YTD mean positivity by year', 'the composition of the year',
         `<table class="dt">
