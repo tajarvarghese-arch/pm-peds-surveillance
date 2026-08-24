@@ -139,6 +139,9 @@ export default function about(root, ctx) {
             <tr><td style="text-align:left"><a href="#exec">Exec Summary</a></td>
               <td style="text-align:left">The disease environment now: index, season topography vs prior
               years, wastewater check, and the index's full derivation.</td></tr>
+            <tr><td style="text-align:left"><a href="#year">2026</a></td>
+              <td style="text-align:left">The year in question: below, at, or above trend — computed
+              week-by-week against every prior observed year, with the windows where it deviates.</td></tr>
             <tr><td style="text-align:left"><a href="#report">Report ▪</a></td>
               <td style="text-align:left">The executive analysis of company volume — load the master
               dataset on Volumes first. Season vs business, environment-adjusted performance, service

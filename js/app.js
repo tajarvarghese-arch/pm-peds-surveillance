@@ -6,6 +6,7 @@ import { VISIT_MIX } from './config.js';
 
 import aboutTab from './tabs/about.js';
 import execTab from './tabs/exec.js';
+import yearTab from './tabs/year.js';
 import pathogensTab from './tabs/pathogens.js';
 import historicalTab from './tabs/historical.js';
 import forecastTab from './tabs/forecast.js';
@@ -20,6 +21,7 @@ import reportTab from './tabs/report.js';
 const TABS = [
   { id: 'about', label: 'About', mod: aboutTab },
   { id: 'exec', label: 'Exec Summary', mod: execTab },
+  { id: 'year', label: '2026', mod: yearTab },
   { id: 'pathogens', label: 'Pathogens', mod: pathogensTab },
   { id: 'historical', label: 'Historical', mod: historicalTab },
   { id: 'forecast', label: 'Forecast & d1/d2', mod: forecastTab },
