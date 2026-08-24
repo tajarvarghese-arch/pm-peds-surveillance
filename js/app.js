@@ -4,6 +4,7 @@ import { snapshot, manifest, freshness, fmtDate, daysAgo, state } from './data.j
 import { destroyAll } from './charts.js';
 import { VISIT_MIX } from './config.js';
 
+import aboutTab from './tabs/about.js';
 import execTab from './tabs/exec.js';
 import pathogensTab from './tabs/pathogens.js';
 import historicalTab from './tabs/historical.js';
@@ -17,6 +18,7 @@ import volumesTab from './tabs/volumes.js';
 import reportTab from './tabs/report.js';
 
 const TABS = [
+  { id: 'about', label: 'About', mod: aboutTab },
   { id: 'exec', label: 'Exec Summary', mod: execTab },
   { id: 'pathogens', label: 'Pathogens', mod: pathogensTab },
   { id: 'historical', label: 'Historical', mod: historicalTab },
@@ -89,7 +91,7 @@ async function boot() {
 
   renderMasthead();
   renderTabs();
-  const initial = location.hash.replace('#', '') || 'exec';
+  const initial = location.hash.replace('#', '') || 'about';
   select(TABS.some((t) => t.id === initial) ? initial : 'exec');
 
   // Non-blocking staleness probe against live CDC.
