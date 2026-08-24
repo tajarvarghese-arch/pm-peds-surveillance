@@ -17,8 +17,6 @@ import { panel, tile, empty, levelBadge } from '../ui.js';
 import { line, bar, hexA } from '../charts.js';
 import { pressureIndex, seasonOf } from '../derive.js';
 import { isoWeekOf } from '../analysis.js';
-import { load as loadVolumes, toWeekly as volWeekly } from '../volumes.js';
-import { trimPartialWeek, windowYoY } from '../analysis.js';
 
 const YEAR_COLORS = ['#64748b', '#94a3b8', '#fbbf24', '#22d3ee', '#a78bfa'];
 
@@ -135,22 +133,6 @@ export default function yearTab(root, ctx) {
       return { s, n: v.length, cum, peak: peak.v, peakAt: peak.t,
                frontLoad: cum > 0 ? preJan / cum : null };
     }).sort((a, b) => (a.s < b.s ? -1 : 1));
-
-  // company tie-in (browser-only, if loaded)
-  const volStore = loadVolumes();
-  let tieIn = null;
-  if (volStore?.data?.length) {
-    const { weekly } = trimPartialWeek(volWeekly(volStore.data));
-    const lastFull = weekly.at(-1)?.t;
-    if (lastFull && lastFull.slice(0, 4) === String(Y)) {
-      const volYoY = windowYoY(weekly, lastFull);
-      const envPts = ppi.filter((p) => p.t.slice(5) <= lastFull.slice(5));
-      const envYoY = windowYoY(envPts.map((p) => ({ t: p.t, v: p.v })), lastFull);
-      if (volYoY?.pct != null && envYoY?.pct != null) {
-        tieIn = { volYoY: volYoY.pct, envYoY: envYoY.pct, gap: volYoY.pct - envYoY.pct };
-      }
-    }
-  }
 
   // ---- verdict, assembled from the computed facts -------------------------
   const overall = rank === 1 ? { t: 'ABOVE ALL PRIOR YEARS', c: 'critical' }
@@ -269,17 +251,14 @@ export default function yearTab(root, ctx) {
       peak lands in December and the spring tail collapses — the calendar year and the season are
       different books.</div>`)}
 
-    ${tieIn ? `<div style="height:10px"></div>
-    ${panel('Company volume vs this environment ▪', 'from the browser-loaded file · visible only to you',
-      `<div class="grid g3">
-        ${tile('Volume YTD YoY', `${tieIn.volYoY > 0 ? '+' : ''}${tieIn.volYoY.toFixed(1)}%`, 'loaded visit data')}
-        ${tile('Environment YTD YoY', `${tieIn.envYoY > 0 ? '+' : ''}${tieIn.envYoY.toFixed(1)}%`, 'CDC index, same window')}
-        ${tile('Gap', `<span class="${tieIn.gap > 0 ? 's-ok' : 's-critical'}">${tieIn.gap > 0 ? '+' : ''}${tieIn.gap.toFixed(1)}pp</span>`,
-          tieIn.gap > 0 ? 'volume fell less than the environment' : 'volume fell more than the environment')}
-      </div>
-      <div class="note">The window analysis above tells you <em>where</em> to attribute volume
-      weakness: weeks where the environment ran at or above trend cannot be blamed on epidemiology.
-      The Report ▪ tab carries the full week-by-week residual analysis.</div>`)}` : ''}
+    <div style="height:10px"></div>
+    <div class="note" style="max-width:900px">
+      <strong>Deliberately no company data on this tab.</strong> This page answers one question —
+      what did the epidemiology do — from public surveillance alone. Company volume is kept off it
+      on purpose: with locations being added, a raw volume comparison against the environment
+      conflates footprint growth with demand, and the clean comparison (same-store, on the Report ▪
+      tab) belongs with the rest of the company analysis, not here.
+    </div>
 
     <div style="height:10px"></div>
 
