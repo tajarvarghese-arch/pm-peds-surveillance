@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-26T11:18:30+00:00",
+ "generated_at": "2026-08-27T14:48:40+00:00",
  "markets": {
   "states": [
    "New York",
@@ -30,10 +30,10 @@
    "geography": "NY / NJ / CT / US",
    "cadence": "daily",
    "note": "Freshest feed. No age breakout -- all ages.",
-   "rows": 1421,
+   "rows": 1428,
    "ok": true,
    "first": "2022-09-25",
-   "last": "2026-08-15"
+   "last": "2026-08-22"
   },
   "naat_multi": {
    "source": "CDC NAAT percent positivity by respiratory virus",
