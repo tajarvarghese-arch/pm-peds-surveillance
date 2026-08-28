@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-27T14:48:40+00:00",
+ "generated_at": "2026-08-28T15:14:09+00:00",
  "markets": {
   "states": [
    "New York",
@@ -74,10 +74,10 @@
    "geography": "Overall (network catchment)",
    "cadence": "weekly",
    "note": "Pediatric hospitalization rates per 100k. Severity denominator.",
-   "rows": 390,
+   "rows": 391,
    "ok": true,
    "first": "2018-10-06",
-   "last": "2026-08-15"
+   "last": "2026-08-22"
   },
   "igas": {
    "source": "CDC ABCs Group A Streptococcus",
@@ -107,10 +107,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 185,
+   "rows": 186,
    "ok": true,
    "first": "2023-01-30",
-   "last": "2026-08-10"
+   "last": "2026-08-17"
   }
  }
 }
