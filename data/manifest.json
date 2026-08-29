@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-28T15:14:09+00:00",
+ "generated_at": "2026-08-29T11:16:48+00:00",
  "markets": {
   "states": [
    "New York",
@@ -19,10 +19,10 @@
    "geography": "United States only (no state breakout exists)",
    "cadence": "weekly",
    "note": "Primary pediatric volume proxy. Age bands <1/1-4/5-17.",
-   "rows": 203,
+   "rows": 204,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-08-15"
+   "last": "2026-08-22"
   },
   "ed_state": {
    "source": "CDC NSSP ED Respiratory Daily",
@@ -41,10 +41,10 @@
    "geography": "National / HHS Region 1 / HHS Region 2",
    "cadence": "weekly",
    "note": "PIV, HMPV, Adenovirus, RV/EV, HCOV, RSV, SARS-CoV-2. NO influenza.",
-   "rows": 372,
+   "rows": 373,
    "ok": true,
    "first": "2019-07-06",
-   "last": "2026-08-15"
+   "last": "2026-08-22"
   },
   "pos_national": {
    "source": "CDC Percent of Tests Positive for Viral Respiratory Pathogens",
@@ -52,10 +52,10 @@
    "geography": "United States",
    "cadence": "weekly",
    "note": "Only live source of influenza positivity. National only.",
-   "rows": 203,
+   "rows": 204,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-08-15"
+   "last": "2026-08-22"
   },
   "ari_level": {
    "source": "CDC Level of Acute Respiratory Illness Activity",
@@ -65,8 +65,8 @@
    "note": "Categorical activity level.",
    "rows": 1,
    "ok": true,
-   "first": "2026-08-15",
-   "last": "2026-08-15"
+   "first": "2026-08-22",
+   "last": "2026-08-22"
   },
   "respnet": {
    "source": "CDC RESP-NET (FluSurv/COVID/RSV-NET)",
@@ -96,10 +96,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 207,
+   "rows": 208,
    "ok": true,
    "first": "2022-08-29",
-   "last": "2026-08-10"
+   "last": "2026-08-17"
   },
   "ww_flu": {
    "source": "CDC NWSS Wastewater -- Influenza A",
