@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-10T14:57:42+00:00",
+ "generated_at": "2026-09-11T14:57:48+00:00",
  "markets": {
   "states": [
    "New York",
@@ -74,10 +74,10 @@
    "geography": "Overall (network catchment)",
    "cadence": "weekly",
    "note": "Pediatric hospitalization rates per 100k. Severity denominator.",
-   "rows": 392,
+   "rows": 393,
    "ok": true,
    "first": "2018-10-06",
-   "last": "2026-08-29"
+   "last": "2026-09-05"
   },
   "igas": {
    "source": "CDC ABCs Group A Streptococcus",
