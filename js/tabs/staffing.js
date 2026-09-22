@@ -251,7 +251,7 @@ function marketTable(edState) {
     </tr>`;
   }).join('');
   return `<table class="dt">
-    <thead><tr><th>Mkt</th><th>ARI</th><th>d1</th><th>d2</th><th>Pctile</th><th>Tier</th></tr></thead>
+    <thead><tr><th>Mkt</th><th>ARI <span style="color:#4b5a6b;font-weight:400">wk avg</span></th><th>d1</th><th>d2</th><th>Pctile</th><th>Tier</th></tr></thead>
     <tbody>${rows}</tbody></table>
     <div class="note">State tiers use <strong>all-ages</strong> ARI — CDC publishes no state-level
     pediatric breakout. Use these for relative market timing, and the national pediatric index above

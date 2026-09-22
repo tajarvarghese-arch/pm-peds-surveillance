@@ -15,7 +15,7 @@
 
 import { panel, tile, empty, levelBadge } from '../ui.js';
 import { line, bar, hexA } from '../charts.js';
-import { pressureIndex, seasonOf } from '../derive.js';
+import { pressureIndex, seasonOf, ordinal } from '../derive.js';
 import { isoWeekOf } from '../analysis.js';
 
 const YEAR_COLORS = ['#64748b', '#94a3b8', '#fbbf24', '#22d3ee', '#a78bfa'];
@@ -32,11 +32,13 @@ function explainCard(w, Y) {
   const comps = w.comps.filter((c) => c.delta !== null);
   if (!comps.length) return '';
   const maxAbs = Math.max(...comps.map((c) => Math.abs(c.delta)), 0.001);
-  const up = comps.filter((c) => c.delta > 0).sort((a, b) => b.delta - a.delta);
-  const down = comps.filter((c) => c.delta < 0).sort((a, b) => a.delta - b.delta);
+  // Anything that would print as "0.0 pts" is not a driver and is not named.
+  const up = comps.filter((c) => c.delta >= 0.05).sort((a, b) => b.delta - a.delta);
+  const down = comps.filter((c) => c.delta <= -0.05).sort((a, b) => a.delta - b.delta);
+  if (!up.length && !down.length) return '';
 
   const nice = (k) => (k === 'COVID-19' ? 'COVID' : k === 'Influenza' ? 'flu' : k);
-  const pts = (v) => (v > 0 ? '+' : '') + v.toFixed(1) + ' pts';
+  const pts = (v) => { const r = Math.abs(v) < 0.05 ? 0 : v; return (r > 0 ? '+' : '') + r.toFixed(1) + ' pts'; };
   const pcts = (c) => (c.med > 0.5
     ? ' (' + (c.delta > 0 ? '+' : '') + (100 * c.delta / c.med).toFixed(0) + '% vs typical)' : '');
 
@@ -48,16 +50,19 @@ function explainCard(w, Y) {
       + '.';
   } else if (w.recLow) {
     const lead = down[0];
-    const share = w.totDelta < 0 && lead ? Math.round(100 * lead.delta / w.totDelta) : null;
+    const gross = down.reduce((a, c) => a + c.delta, 0);
+    const share = gross < 0 && lead ? Math.round(100 * lead.delta / gross) : null;
     sentence = 'Record low driven by '
       + down.map((c) => '<strong>' + nice(c.k) + '</strong> ' + pts(c.delta) + pcts(c)).join(' and ')
-      + (share && share >= 55 ? ' — ' + nice(lead.k) + ' alone accounts for ~' + share + '% of the shortfall' : '')
+      + (share && share >= 55 && down.length > 1
+        ? ' — ' + nice(lead.k) + ' alone is ~' + share + '% of the decline' : '')
       + (up.length ? '; ' + up.map((c) => nice(c.k) + ' ' + pts(c.delta)).join(' and ') + ' partially offset' : '')
       + '.';
     if (w.secs.length >= 3 && w.secsAtOrAbove >= w.secs.length - 1) {
       sentence += ' Secondary viruses (' + w.secs.map((x) => x.k).join(', ') + ') are running at or '
         + 'above typical levels, so this is not a general disappearance of illness — it is specific '
-        + 'to the pathogens above, chiefly the absent summer ' + nice(down[0].k) + ' wave.';
+        + 'to the pathogens above, chiefly the '
+        + (w.phase === 'trough' ? 'absent summer ' : 'missing ') + nice(down[0].k) + ' wave.';
     }
   } else {
     const vsLastTot = comps.reduce((a, c) => a + c.deltaLast, 0);
@@ -91,6 +96,12 @@ function explainCard(w, Y) {
     + '<span style="font-size:10px;color:#4b5a6b">contribution vs prior-year median, index points</span></div>'
     + '<div style="display:grid;gap:3px;margin:6px 0">' + bars + '</div>'
     + '<div class="note" style="margin-top:2px">' + sentence + '</div></div>';
+}
+
+/** "September" for a week-ending date, for sentences assembled from the data. */
+function monthName(dateStr) {
+  return new Date(dateStr + 'T00:00:00Z')
+    .toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
 }
 
 /** ISO year (the year of the week's Thursday) — must pair with isoWeekOf. */
@@ -156,21 +167,38 @@ export default function yearTab(root, ctx) {
   const before = firstOfStreak ? weekRows.filter((r) => r.w < firstOfStreak.w) : weekRows;
   const meanBefore = before.length ? before.reduce((a, r) => a + r.pct, 0) / before.length : null;
 
-  // windows
-  const windows = [
-    { name: 'Jan – Feb (peak tail)', lo: 1, hi: 8 },
-    { name: 'Mar – May (spring)', lo: 9, hi: 22 },
-    { name: `Jun → now (trough)`, lo: 23, hi: latestW },
-  ].map((win) => {
+  // windows -- a fixed partition of the calendar year, so the same panel reads
+  // correctly in March and in November without anyone editing the code. Only
+  // windows that have started are shown; the one in progress is clipped to the
+  // latest observed week and labelled "→ now". Fixed boundaries matter: the
+  // summer trough and the back-to-school ramp are different regimes, and a
+  // single "June to now" bucket lets a record-low July hide a normal September.
+  const CAL_WINDOWS = [
+    { name: 'Jan – Feb', phase: 'peak tail', lo: 1, hi: 8 },
+    { name: 'Mar – May', phase: 'spring', lo: 9, hi: 22 },
+    { name: 'Jun – Aug', phase: 'trough', lo: 23, hi: 35 },
+    { name: 'Sep – Nov', phase: 'ramp', lo: 36, hi: 48 },
+    { name: 'Dec', phase: 'peak', lo: 49, hi: 53 },
+  ];
+  const windows = CAL_WINDOWS.filter((w) => w.lo <= latestW).map((cw) => {
+    const open = cw.hi > latestW;
+    const hi = Math.min(cw.hi, latestW);
+    const weeks = hi - cw.lo + 1;
+    const name = open
+      ? `${cw.name.split(' ')[0]} → now (${cw.phase})`
+      : `${cw.name} (${cw.phase})`;
+    const win = { ...cw, name, hi, open, weeks };
     const per = [...priors, Y].map((y) => ({
       y, cum: pts.filter((p) => p.y === y && p.w >= win.lo && p.w <= win.hi)
         .reduce((a, p) => a + p.v, 0),
     }));
     const cur = per.find((p) => p.y === Y);
     const others = per.filter((p) => p.y !== Y).map((p) => p.cum);
-    return { ...win, per, cur: cur?.cum ?? 0,
-      recLow: others.length && cur.cum < Math.min(...others),
-      recHigh: others.length && cur.cum > Math.max(...others) };
+    // One week is a data point, not a window: no record verdict until two.
+    const enough = weeks >= 2;
+    return { ...win, per, cur: cur?.cum ?? 0, enough,
+      recLow: enough && others.length && cur.cum < Math.min(...others),
+      recHigh: enough && others.length && cur.cum > Math.max(...others) };
   });
 
   // ---- per-window pathogen decomposition ---------------------------------
@@ -270,10 +298,12 @@ export default function yearTab(root, ctx) {
             <strong>#${rank} of ${priors.length + 1}</strong> observed years
             ${vsLastPct !== null ? `(${vsLastPct > 0 ? '+' : ''}${vsLastPct.toFixed(0)}% vs ${Y - 1})` : ''}.
             ${streak >= 4 && meanBefore !== null && meanBefore >= 45 ? `
-            But the year is <strong>not uniform</strong>: through the spring it ran at the
-            ${meanBefore.toFixed(0)}th percentile of prior years, and since week ${firstOfStreak.w}
+            But the year is <strong>not uniform</strong>: up to week ${firstOfStreak.w - 1} it ran at the
+            ${ordinal(meanBefore)} percentile of prior years, and since week ${firstOfStreak.w}
+            (${monthName(firstOfStreak.t)})
             <strong>every single week has been the lowest ever observed for that calendar week</strong>
-            (${streak} consecutive record-low weeks). The anomaly is the summer, not the year.`
+            (${streak} consecutive record-low weeks). The anomaly is the stretch from
+            ${monthName(firstOfStreak.t)} to ${monthName(weekRows.at(-1).t)}, not the year.`
             : streak >= 4 ? `The most recent ${streak} weeks are all record lows for their calendar week.`
             : ''}
           </div>
@@ -284,7 +314,7 @@ export default function yearTab(root, ctx) {
           ${tile(`vs ${Y - 1}`, vsLastPct === null ? '--'
               : `<span class="${vsLastPct < 0 ? 's-ok' : 's-critical'}">${vsLastPct > 0 ? '+' : ''}${vsLastPct.toFixed(0)}%</span>`,
             vsLast ? `${Y - 1} was rank #${1 + priorCums.filter((p) => p.cum > vsLast.cum).length} of priors` : '')}
-          ${tile('Mean weekly percentile', `${meanPct.toFixed(0)}th`, `across ${n} comparable weeks`)}
+          ${tile('Mean weekly percentile', ordinal(meanPct), `across ${n} comparable weeks`)}
           ${tile('Record-low weeks', `<span class="${recLows > n / 4 ? 's-ok' : ''}">${recLows}</span>`,
             `of ${n} · ${recHighs} record highs`)}
           ${tile('Current record-low streak', `<span class="${streak >= 4 ? 's-watch' : ''}">${streak}</span>`,
@@ -318,17 +348,21 @@ export default function yearTab(root, ctx) {
           <thead><tr><th style="text-align:left">Window</th>
             ${[...priors, Y].map((y) => `<th>${y}</th>`).join('')}<th>Verdict</th></tr></thead>
           <tbody>${windows.map((w) => `<tr>
-            <td style="text-align:left">${w.name}</td>
+            <td style="text-align:left">${w.name}${w.open
+              ? ` <span style="color:#4b5a6b;font-size:10px">${w.weeks} wk${w.weeks === 1 ? '' : 's'} so far</span>` : ''}</td>
             ${w.per.map((p) => `<td class="num" ${p.y === Y ? 'style="font-weight:700"' : 'style="color:#7f8ea0"'}>${p.cum.toFixed(1)}</td>`).join('')}
-            <td>${w.recLow ? '<span class="s-ok">record low</span>'
+            <td>${!w.enough ? '<span style="color:#4b5a6b">too early</span>'
+                : w.recLow ? '<span class="s-ok">record low</span>'
                 : w.recHigh ? '<span class="s-critical">record high</span>'
                 : '<span style="color:#7f8ea0">in range</span>'}</td>
           </tr>`).join('')}</tbody>
         </table>
         <div class="note">The same year can hold a record-high window and a record-low window. For
         planning, the window verdicts matter more than the annual total — staffing is set by week,
-        not by year.</div>
-        ${windowExplain.map((w) => explainCard(w, Y)).join('')}`)}
+        not by year. Windows are fixed calendar blocks, and the one in progress is compared against
+        the <em>same partial span</em> of each prior year — so an early-season verdict rests on a
+        few weeks and firms up as the window fills.</div>
+        ${windowExplain.filter((w) => w.enough).map((w) => explainCard(w, Y)).join('')}`)}
 
       ${panel('Pathogen mix — YTD mean positivity by year', 'the composition of the year',
         `<table class="dt">
