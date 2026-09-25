@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-24T15:48:07+00:00",
+ "generated_at": "2026-09-25T15:47:48+00:00",
  "markets": {
   "states": [
    "New York",
@@ -41,10 +41,10 @@
    "geography": "National / HHS Region 1 / HHS Region 2",
    "cadence": "weekly",
    "note": "PIV, HMPV, Adenovirus, RV/EV, HCOV, RSV, SARS-CoV-2. NO influenza.",
-   "rows": 376,
+   "rows": 377,
    "ok": true,
    "first": "2019-07-06",
-   "last": "2026-09-12"
+   "last": "2026-09-19"
   },
   "pos_national": {
    "source": "CDC Percent of Tests Positive for Viral Respiratory Pathogens",
@@ -74,10 +74,10 @@
    "geography": "Overall (network catchment)",
    "cadence": "weekly",
    "note": "Pediatric hospitalization rates per 100k. Severity denominator.",
-   "rows": 394,
+   "rows": 395,
    "ok": true,
    "first": "2018-10-06",
-   "last": "2026-09-12"
+   "last": "2026-09-19"
   },
   "igas": {
    "source": "CDC ABCs Group A Streptococcus",
@@ -96,10 +96,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 211,
+   "rows": 212,
    "ok": true,
    "first": "2022-08-29",
-   "last": "2026-09-07"
+   "last": "2026-09-14"
   },
   "ww_flu": {
    "source": "CDC NWSS Wastewater -- Influenza A",
@@ -107,10 +107,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 189,
+   "rows": 190,
    "ok": true,
    "first": "2023-01-30",
-   "last": "2026-09-07"
+   "last": "2026-09-14"
   }
  }
 }
