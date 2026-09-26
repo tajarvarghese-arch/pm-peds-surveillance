@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-25T15:47:48+00:00",
+ "generated_at": "2026-09-26T14:57:40+00:00",
  "markets": {
   "states": [
    "New York",
@@ -19,10 +19,10 @@
    "geography": "United States only (no state breakout exists)",
    "cadence": "weekly",
    "note": "Primary pediatric volume proxy. Age bands <1/1-4/5-17.",
-   "rows": 207,
+   "rows": 208,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-09-12"
+   "last": "2026-09-19"
   },
   "ed_state": {
    "source": "CDC NSSP ED Respiratory Daily",
@@ -52,10 +52,10 @@
    "geography": "United States",
    "cadence": "weekly",
    "note": "Only live source of influenza positivity. National only.",
-   "rows": 207,
+   "rows": 208,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-09-12"
+   "last": "2026-09-19"
   },
   "ari_level": {
    "source": "CDC Level of Acute Respiratory Illness Activity",
@@ -65,8 +65,8 @@
    "note": "Categorical activity level.",
    "rows": 1,
    "ok": true,
-   "first": "2026-09-12",
-   "last": "2026-09-12"
+   "first": "2026-09-19",
+   "last": "2026-09-19"
   },
   "respnet": {
    "source": "CDC RESP-NET (FluSurv/COVID/RSV-NET)",
