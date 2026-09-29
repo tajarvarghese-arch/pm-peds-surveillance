@@ -14,12 +14,10 @@
 // computed facts.
 
 import { panel, tile, empty, levelBadge } from '../ui.js';
-import { line, bar, hexA } from '../charts.js';
+import { line, bar, hexA, yearColor } from '../charts.js';
 import { pressureIndex, seasonOf, ordinal } from '../derive.js';
 import { isoWeekOf } from '../analysis.js';
 
-// Prior years are context: greys that brighten toward the present.
-const YEAR_COLORS = ['#5b6b7d', '#7f8ea0', '#a9b7c6', '#c9d3de', '#dfe6ee'];
 const COMP_COLORS = { 'COVID-19': '#3987e5', Influenza: '#d95926', RSV: '#199e70' };
 
 /**
@@ -441,8 +439,8 @@ export default function yearTab(root, ctx) {
       return {
         label: String(y),
         data: axis.map((w) => (m.has(w) ? +m.get(w).toFixed(2) : null)),
-        borderColor: isY ? '#22d3ee' : YEAR_COLORS[i % YEAR_COLORS.length],
-        borderWidth: isY ? 3 : 1.6,
+        borderColor: yearColor(y, Y),
+        borderWidth: isY ? 3 : 2,
         emphasis: isY,
         backgroundColor: isY ? hexA('#22d3ee', 0.08) : 'transparent',
         fill: isY,

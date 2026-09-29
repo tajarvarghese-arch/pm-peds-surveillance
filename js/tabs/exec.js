@@ -1,7 +1,7 @@
 // Executive summary: one screen that answers "do I need more staff soon?"
 
 import { panel, tile, num, delta, levelBadge, labelsFrom, valuesFrom, empty } from '../ui.js';
-import { line, bar, hexA, sparkline, SERIES, AGE_COLORS } from '../charts.js';
+import { line, bar, hexA, sparkline, SERIES, AGE_COLORS, yearColor } from '../charts.js';
 import { PATHOGENS, PED_AGES, MARKETS } from '../config.js';
 import { pressureIndex, staffing, d1, d2, seasonalBands, isoWeek, seasonOf, percentileRank,
   indexQuantum, wastewaterSignal, corroborate, quantile } from '../derive.js';
@@ -194,7 +194,7 @@ export default function exec(root, ctx) {
   ];
   if (prevSeason) {
     ds.push({ label: `${prevSeason} (last season)`, shortLabel: prevSeason, data: pick(prevSeason),
-              borderColor: SERIES.context, borderDash: [5, 4], backgroundColor: 'transparent' });
+              borderColor: yearColor(prevSeason, curSeason), backgroundColor: 'transparent' });
   }
   ds.push({ label: `${curSeason} (current)`, data: pick(curSeason), borderColor: SERIES.focus,
             emphasis: true, backgroundColor: 'transparent' });
@@ -466,20 +466,18 @@ function topographyPanel(ppi) {
 
   const maxV = Math.max(...ppi.map((p) => p.v));
 
-  // Older seasons recede in brightness as well as depth.
+  // One colour per season, the same the Year tab and the charts above use.
   const ridges = priorKeys.map((k, i) => {
-    const t = priorKeys.length === 1 ? 1 : i / (priorKeys.length - 1);
-    const a = 0.55 + t * 0.40;
+    const col = yearColor(k, currentKey);
     return {
       key: k, label: k, values: seasons.get(k),
-      color: `rgba(180,194,209,${a.toFixed(2)})`,
-      fill: `rgba(70,95,122,${(0.30 + t * 0.25).toFixed(2)})`,
-      width: 1.4, current: false,
+      color: col, fill: hexA(col, 0.20),
+      width: 1.6, current: false,
     };
   });
   ridges.push({
     key: 'median', label: 'prior median', values: ghost,
-    color: '#fbbf24', fill: 'rgba(251,191,36,0.10)',
+    color: '#eef3f8', fill: 'rgba(238,243,248,0.06)',
     width: 1.6, dash: '5 4', current: false,
   });
   ridges.push({
@@ -510,7 +508,7 @@ function topographyPanel(ppi) {
       <tbody>${dev.rows.map((r) => `<tr>
         <td>w${r.w}</td>
         <td class="num">${num(r.cur, 3, '%')}</td>
-        <td class="num" style="color:#fbbf24">${num(r.med, 3, '%')}</td>
+        <td class="num">${num(r.med, 3, '%')}</td>
         <td class="num" style="color:#8797a9">${num(r.lo, 2)}–${num(r.hi, 2)}</td>
         <td class="num ${r.dev < -25 ? 's-ok' : r.dev > 25 ? 's-critical' : 's-watch'}">
           ${r.dev > 0 ? '+' : ''}${r.dev.toFixed(0)}%</td>
@@ -542,7 +540,7 @@ function topographyPanel(ppi) {
         </div>
       </div>
       <div class="note">Each ridge is one season on a week-of-season axis (w27→w26). Depth is the only
-      thing the third dimension encodes — it is not decoration. The dashed amber ridge is the
+      thing the third dimension encodes — it is not decoration. The dashed white ridge is the
       <strong>median of the ${priorKeys.length} prior seasons</strong>, placed directly behind the
       current season so the gap between them is the deviation. Older seasons fade with depth.</div>
       ${dev && dev.rows.length < 6 ? `<div class="note warn">The ${currentKey} season is only
@@ -588,7 +586,7 @@ function mountRecent(ppi, quantum) {
   const priorSeries = priorYears.map((y, i) => ({
     year: y,
     data: seriesFor(curYear - y),
-    color: `rgba(127,142,160,${(0.78 - i * 0.20).toFixed(2)})`,
+    color: yearColor(y, curYear),
   })).filter((s) => s.data.some((v) => v !== null));
 
   // Median across prior years at each week, so "normal for this week" has a line.
@@ -607,7 +605,7 @@ function mountRecent(ppi, quantum) {
     datasets: [
       ...priorSeries.map((s) => ({
         label: String(s.year), data: s.data,
-        borderColor: s.color, borderWidth: 1.5, endLabel: false,
+        borderColor: s.color, borderWidth: 2,
         backgroundColor: 'transparent', pointRadius: 0,
       })),
       ...(median.some((v) => v !== null) ? [{

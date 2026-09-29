@@ -115,9 +115,12 @@ export function renderIso(host, model, view) {
   for (const b of baselines) {
     svg.push(`<line x1="${X(b.a)}" y1="${Y(b.a)}" x2="${X(b.b)}" y2="${Y(b.b)}"
       stroke="${b.current ? '#3d5268' : '#223040'}" stroke-width="0.7"/>`);
-    svg.push(`<text x="${(+X(b.a) - 5).toFixed(1)}" y="${(+Y(b.a) + 3).toFixed(1)}"
+    svg.push(`<text x="${(+X(b.a) - 7).toFixed(1)}" y="${(+Y(b.a) + 3).toFixed(1)}"
       fill="${b.current ? '#eef3f8' : '#b4c2d1'}" font-size="9" font-family="system-ui, sans-serif"
       text-anchor="end" ${b.current ? 'font-weight="700"' : ''}>${b.label}</text>`);
+    // colour key beside the name: identity comes from the swatch, not the text
+    svg.push(`<rect x="${(+X(b.a) - 3.5).toFixed(1)}" y="${(+Y(b.a) - 2.5).toFixed(1)}"
+      width="5" height="5" rx="1" fill="${b.color}"/>`);
   }
 
   // ridges

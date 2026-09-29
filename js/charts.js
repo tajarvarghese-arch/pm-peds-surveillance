@@ -46,6 +46,24 @@ export const SERIES = {
   reference: '#c9d3de',
 };
 
+/**
+ * One colour per calendar year, the same on every tab. The current year is the
+ * focus colour; the three years before it each get their own hue, chosen so
+ * that every pair stays distinguishable, including under colour-vision
+ * deficiency. Anything older recedes to grey: past three priors a fourth hue
+ * would collide with one already in use.
+ * Keyed to the year itself, not its rank, so 2025 keeps its colour when 2027
+ * arrives rather than inheriting 2026's.
+ */
+const YEAR_HUES = ['#d55181', '#9085e9', '#c98500'];
+export function yearColor(year, currentYear) {
+  const y = +String(year).slice(0, 4);
+  const c = +String(currentYear).slice(0, 4);
+  if (y === c) return SERIES.focus;
+  if (c - y > 3 || y > c) return SERIES.context;
+  return YEAR_HUES[y % 3];
+}
+
 export const STATE_COLORS = { NY: SERIES.blue, NJ: SERIES.orange, CT: SERIES.aqua, US: SERIES.context };
 export const AGE_COLORS = [SERIES.violet, SERIES.magenta, SERIES.yellow];
 
