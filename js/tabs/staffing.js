@@ -43,11 +43,11 @@ export default function staffingTab(root, ctx) {
               <tr><td>Percentile</td><td class="num">${ordinal(alert.pct)} of ${alert.n} wks</td></tr>
               <tr><td>d1 week over week</td><td class="num">${delta(alert.d1, { noisy: alert.noisy })}</td></tr>
               <tr><td>d2 acceleration</td><td class="num">${delta(alert.d2, { suffix: 'pp', noisy: alert.noisy })}</td></tr>
-              <tr><td>Reporting resolution</td><td class="num" style="color:#7f8ea0">±${quantum.toFixed(3)}pp</td></tr>
+              <tr><td>Reporting resolution</td><td class="num" style="color:#a3b3c5">±${quantum.toFixed(3)}pp</td></tr>
               <tr><td>Acceleration promotion</td><td class="num">${alert.promoted
                 ? '<span class="s-elevated">APPLIED</span>'
-                : alert.noisy ? '<span style="color:#4b5a6b">blocked — noise</span>'
-                : '<span style="color:#4b5a6b">no</span>'}</td></tr>
+                : alert.noisy ? '<span style="color:#8797a9">blocked — noise</span>'
+                : '<span style="color:#8797a9">no</span>'}</td></tr>
             </table>
           </div>
         </div>
@@ -66,23 +66,23 @@ export default function staffingTab(root, ctx) {
         <div style="font-size:16px;font-weight:700" class="s-${corr.cls}">
           ${levelBadge(corr.verdict, corr.cls)}
         </div>
-        <div style="flex:1;min-width:260px;color:#7f8ea0;font-size:11px">${corr.detail}</div>
+        <div style="flex:1;min-width:260px;color:#a3b3c5;font-size:12.5px">${corr.detail}</div>
       </div>
       <table class="dt">
         <thead><tr><th>Mkt</th><th>WW pctile</th><th>3wk trend</th><th>Direction</th><th>n wks</th></tr></thead>
         <tbody>${MARKETS.states.map((full) => {
           const ab = MARKETS.abbr[full];
           const s = wwSignals[ab];
-          if (!s) return `<tr><td>${ab}</td><td class="num" colspan="4" style="color:#4b5a6b">no signal</td></tr>`;
+          if (!s) return `<tr><td>${ab}</td><td class="num" colspan="4" style="color:#8797a9">no signal</td></tr>`;
           const dir = s.dir === 'rising' ? '<span class="s-critical">▲ rising</span>'
             : s.dir === 'falling' ? '<span class="s-ok">▼ falling</span>'
-            : '<span style="color:#7f8ea0">■ flat</span>';
+            : '<span style="color:#a3b3c5">■ flat</span>';
           return `<tr>
             <td>${ab}</td>
             <td class="num ${s.pct >= 75 ? 's-elevated' : ''}">${ordinal(s.pct)}</td>
             <td class="num">${delta(s.trendPct)}</td>
             <td style="text-align:left">${dir}</td>
-            <td class="num" style="color:#4b5a6b">${s.n}</td>
+            <td class="num" style="color:#8797a9">${s.n}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>
@@ -139,14 +139,16 @@ export default function staffingTab(root, ctx) {
     datasets: [
       ...cuts.slice(1).map((c) => ({
         label: `${c.name} ≥ ${c.at.toFixed(2)}%`,
+        shortLabel: c.name,
         data: ppi.map(() => +c.at.toFixed(3)),
         borderColor: { watch: '#fbbf24', elevated: '#f97316', critical: '#ef4444' }[c.class],
-        borderWidth: 1, borderDash: [3, 3], pointRadius: 0, backgroundColor: 'transparent',
+        borderWidth: 1.5, borderDash: [6, 5], pointRadius: 0, backgroundColor: 'transparent',
       })),
-      { label: 'pressure index', data: ppi.map((p) => +p.v.toFixed(3)),
-        borderColor: '#22d3ee', borderWidth: 2,
-        backgroundColor: hexA('#22d3ee', 0.08), fill: true },
+      { label: 'pressure index', shortLabel: 'index', data: ppi.map((p) => +p.v.toFixed(3)),
+        borderColor: '#22d3ee', emphasis: true,
+        backgroundColor: hexA('#22d3ee', 0.10), fill: true },
     ],
+    options: { unit: '%' },
   });
 }
 
@@ -191,7 +193,7 @@ function mixControls(ctx) {
       <label style="display:grid;grid-template-columns:70px 1fr 44px;gap:8px;align-items:center;text-transform:none;letter-spacing:0">
         <span style="color:#d8e0e8">${age}</span>
         <input type="range" id="mix-${slug(age)}" min="0" max="1" step="0.01" value="${ctx.mix[age]}">
-        <span class="num" style="color:#7f8ea0;font-size:11px">${(ctx.mix[age] / (total || 1) * 100).toFixed(0)}%</span>
+        <span class="num" style="color:#a3b3c5;font-size:12.5px">${(ctx.mix[age] / (total || 1) * 100).toFixed(0)}%</span>
       </label>`).join('')}
     <button class="ghost" id="mix-reset">reset to default estimate</button>
     ${mixIsCustom() ? `<div class="note" style="border-left-color:var(--ok)">
@@ -220,7 +222,7 @@ function thresholdTable(cuts, alert) {
         <td class="num">${c.pct}th</td>
         <td class="num">${num(c.at, 3, '%')}</td>
         <td class="num" style="font-weight:700">${c.mult.toFixed(1)}×</td>
-        <td style="text-align:left;color:#7f8ea0;font-size:10.5px">
+        <td style="text-align:left;color:#a3b3c5;font-size:12.5px">
           ${c.pct === 0 ? 'below median of observed history'
             : `index at or above the ${c.pct}th percentile of ${alert.n} observed weeks`}
         </td>
@@ -251,7 +253,7 @@ function marketTable(edState) {
     </tr>`;
   }).join('');
   return `<table class="dt">
-    <thead><tr><th>Mkt</th><th>ARI <span style="color:#4b5a6b;font-weight:400">wk avg</span></th><th>d1</th><th>d2</th><th>Pctile</th><th>Tier</th></tr></thead>
+    <thead><tr><th>Mkt</th><th>ARI <span style="color:#8797a9;font-weight:400">wk avg</span></th><th>d1</th><th>d2</th><th>Pctile</th><th>Tier</th></tr></thead>
     <tbody>${rows}</tbody></table>
     <div class="note">State tiers use <strong>all-ages</strong> ARI — CDC publishes no state-level
     pediatric breakout. Use these for relative market timing, and the national pediatric index above

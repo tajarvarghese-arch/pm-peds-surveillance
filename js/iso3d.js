@@ -39,15 +39,15 @@ function project(x, y, z, yaw, pitch) {
  */
 export function renderIso(host, model, view) {
   const { axis, ridges, maxV, monthTicks = [] } = model;
-  const yaw = (view.yaw ?? -28) * DEG;
-  const pitch = (view.pitch ?? 58) * DEG;
+  const yaw = (view.yaw ?? -22) * DEG;
+  const pitch = (view.pitch ?? 40) * DEG;
 
   // World extents, tuned so the projected bounding box lands near the 1.7:1
   // aspect of the host panel -- otherwise SVG's default "meet" fit letterboxes
   // the scene and it renders at half the available width.
   const SPAN_X = 520;
-  const SPAN_Z = 16 * Math.max(1, ridges.length - 1) || 16;
-  const HEIGHT = 96;
+  const SPAN_Z = 24 * Math.max(1, ridges.length - 1) || 24;
+  const HEIGHT = 170;
 
   const xAt = (i) => (i / Math.max(1, axis.length - 1)) * SPAN_X - SPAN_X / 2;
   const zAt = (i) => (ridges.length === 1 ? 0 : (i / (ridges.length - 1)) * SPAN_Z - SPAN_Z / 2);
@@ -90,7 +90,7 @@ export function renderIso(host, model, view) {
 
   // ---- fit to viewBox -----------------------------------------------------
   const xs = pts.map((p) => p.sx), ys = pts.map((p) => p.sy);
-  const pad = 14;
+  const pad = 26;
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
   const W = maxX - minX, H = maxY - minY;
@@ -107,16 +107,16 @@ export function renderIso(host, model, view) {
   // month gridlines
   for (const f of floor) {
     svg.push(`<line x1="${X(f.a)}" y1="${Y(f.a)}" x2="${X(f.b)}" y2="${Y(f.b)}"
-      stroke="#1e2936" stroke-width="0.6"/>`);
-    svg.push(`<text x="${X(f.a)}" y="${(+Y(f.a) + 9).toFixed(1)}" fill="#4b5a6b"
-      font-size="4.4" font-family="monospace" text-anchor="middle">${f.label}</text>`);
+      stroke="#2d3f52" stroke-width="0.7"/>`);
+    svg.push(`<text x="${X(f.a)}" y="${(+Y(f.a) + 13).toFixed(1)}" fill="#b4c2d1"
+      font-size="9" font-family="system-ui, sans-serif" text-anchor="middle">${f.label}</text>`);
   }
   // season baselines + labels
   for (const b of baselines) {
     svg.push(`<line x1="${X(b.a)}" y1="${Y(b.a)}" x2="${X(b.b)}" y2="${Y(b.b)}"
-      stroke="${b.current ? '#2d3f52' : '#16202b'}" stroke-width="0.6"/>`);
-    svg.push(`<text x="${(+X(b.a) - 3).toFixed(1)}" y="${(+Y(b.a) + 1.6).toFixed(1)}"
-      fill="${b.current ? b.color : '#4b5a6b'}" font-size="4.6" font-family="monospace"
+      stroke="${b.current ? '#3d5268' : '#223040'}" stroke-width="0.7"/>`);
+    svg.push(`<text x="${(+X(b.a) - 5).toFixed(1)}" y="${(+Y(b.a) + 3).toFixed(1)}"
+      fill="${b.current ? '#eef3f8' : '#b4c2d1'}" font-size="9" font-family="system-ui, sans-serif"
       text-anchor="end" ${b.current ? 'font-weight="700"' : ''}>${b.label}</text>`);
   }
 
@@ -147,8 +147,8 @@ export function renderIso(host, model, view) {
         for (const i of idxs) {
           svg.push(`<line x1="${X(r.base[i])}" y1="${Y(r.base[i])}"
             x2="${X(r.top[i])}" y2="${Y(r.top[i])}"
-            stroke="${r.color}" stroke-width="0.5" opacity="0.5"/>`);
-          svg.push(`<circle cx="${X(r.top[i])}" cy="${Y(r.top[i])}" r="1.5"
+            stroke="${r.color}" stroke-width="0.7" opacity="0.5"/>`);
+          svg.push(`<circle cx="${X(r.top[i])}" cy="${Y(r.top[i])}" r="2.2"
             fill="${r.color}"/>`);
         }
       }

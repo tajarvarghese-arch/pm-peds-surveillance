@@ -16,8 +16,8 @@ import { toWeeklyMonday, fmtDate } from '../data.js';
 import { rerender } from '../app.js';
 
 const TARGETS = {
-  'SARS-CoV-2': { file: 'ww_covid', ed: 'COVID', color: '#22d3ee', dataset: 'j9g8-acpt' },
-  'Influenza A': { file: 'ww_flu', ed: 'Influenza', color: '#fbbf24', dataset: 'ymmh-divb' },
+  'SARS-CoV-2': { file: 'ww_covid', ed: 'COVID', color: '#3987e5', dataset: 'j9g8-acpt' },
+  'Influenza A': { file: 'ww_flu', ed: 'Influenza', color: '#d95926', dataset: 'ymmh-divb' },
 };
 
 export function wwSeries(db, file, abbr) {
@@ -64,7 +64,7 @@ export default function wastewater(root, ctx) {
           ${Object.keys(TARGETS).map((k) => `<option ${k === targetKey ? 'selected' : ''}>${k}</option>`).join('')}
         </select>
       </label>
-      <span style="color:#4b5a6b;font-size:10.5px">
+      <span style="color:#8797a9;font-size:12.5px">
         CDC NWSS ${target.dataset} · population-weighted, liquid assay only · vs NSSP ED ${target.ed} share
       </span>
     </div>
@@ -97,12 +97,12 @@ export default function wastewater(root, ctx) {
     ds.push({
       label: `${s.ab} wastewater`,
       data: allT.map((t) => (wwIdx.has(t) ? +wwIdx.get(t).toFixed(1) : null)),
-      borderColor: target.color, borderWidth: 1.8, backgroundColor: 'transparent',
+      borderColor: target.color, emphasis: true, backgroundColor: 'transparent',
     });
     ds.push({
       label: `${s.ab} ED ${target.ed}`,
       data: allT.map((t) => (edIdx.has(t) ? +edIdx.get(t).toFixed(1) : null)),
-      borderColor: '#7f8ea0', borderWidth: 1.2, borderDash: [4, 3], backgroundColor: 'transparent',
+      borderColor: '#c9d3de', borderWidth: 1.8, borderDash: [5, 4], backgroundColor: 'transparent',
     });
   }
   // One state at a time is legible; three overlaid pairs is not.
@@ -115,27 +115,28 @@ export default function wastewater(root, ctx) {
       return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
     }),
     datasets: shown,
-    options: { scales: { y: { title: { display: true, text: '% of own median',
-      color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } } },
+    options: { unit: '%', scales: { y: { title: { display: true, text: '% of own median',
+      color: '#8797a9', font: { family: 'monospace', size: 9 } } } } },
   });
 
   // --- cross-correlation curve ------------------------------------------
+  const XC_COLORS = ['#3987e5', '#d95926', '#199e70'];   // NY, NJ, CT -- as on Geography
   const lags = perState[0].xc.scan.map((s) => s.lag);
   line(document.getElementById('c-xc'), {
     labels: lags.map((l) => (l > 0 ? `+${l}w` : `${l}w`)),
     datasets: perState.map((s, i) => ({
       label: `${s.ab} growth-rate r`,
       data: s.xc.scan.map((x) => (x.r === null ? null : +x.r.toFixed(3))),
-      borderColor: ['#22d3ee', '#fbbf24', '#4ade80'][i],
+      borderColor: XC_COLORS[i],
       backgroundColor: 'transparent',
     })).concat(perState.map((s, i) => ({
       label: `${s.ab} level r`,
       data: s.xcLevel.scan.map((x) => (x.r === null ? null : +x.r.toFixed(3))),
-      borderColor: ['#22d3ee', '#fbbf24', '#4ade80'][i],
-      borderDash: [3, 3], borderWidth: 1, backgroundColor: 'transparent',
+      borderColor: XC_COLORS[i], endLabel: false,
+      borderDash: [5, 4], borderWidth: 1.5, backgroundColor: 'transparent',
     }))),
     options: { scales: { y: { title: { display: true, text: 'Pearson r',
-      color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } } },
+      color: '#8797a9', font: { family: 'monospace', size: 9 } } } } },
   });
 
   for (const s of perState) {
@@ -147,7 +148,7 @@ export default function wastewater(root, ctx) {
 function stateTile(s) {
   if (!s.sig) {
     return `<div class="tile"><div class="label">${s.ab}</div>
-      <div class="value" style="font-size:18px;color:#4b5a6b">no data</div>
+      <div class="value" style="font-size:18px;color:#8797a9">no data</div>
       <div class="foot">insufficient wastewater samples</div></div>`;
   }
   const { sig } = s;
@@ -155,7 +156,7 @@ function stateTile(s) {
     : sig.pct >= 50 ? 's-watch' : 's-ok';
   const arrow = sig.dir === 'rising' ? '<span class="s-critical">▲ RISING</span>'
     : sig.dir === 'falling' ? '<span class="s-ok">▼ FALLING</span>'
-    : '<span style="color:#7f8ea0">■ FLAT</span>';
+    : '<span style="color:#a3b3c5">■ FLAT</span>';
   return `<div class="tile">
     <div class="label">${s.ab} wastewater</div>
     <div class="value ${cls}" style="font-size:22px">${ordinal(sig.pct)}<small> pctile</small></div>
@@ -174,7 +175,7 @@ function leadLagPanel(perState, targetKey) {
       <td>${s.ab}</td>
       <td class="num">${fmt(l)}</td>
       <td class="num ${g && g.r >= 0.3 ? 's-watch' : ''}">${fmt(g)}</td>
-      <td class="num" style="color:#4b5a6b">${l ? l.n : 0}</td>
+      <td class="num" style="color:#8797a9">${l ? l.n : 0}</td>
     </tr>`;
   }).join('');
 

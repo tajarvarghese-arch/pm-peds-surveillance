@@ -12,16 +12,18 @@ export const MARKETS = {
   },
 };
 
-// Terminal palette. Pathogen -> accent, per the brief's colour language.
+// Pathogen identity colours. Fixed per pathogen on every tab, validated as a
+// set against the dark surface, and kept clear of the status colours so a
+// series never reads as an alarm.
 export const PATHOGENS = {
-  'COVID-19': { key: 'COVID-19', edKey: 'COVID', color: '#22d3ee', label: 'COVID' },
-  Influenza: { key: 'Influenza', edKey: 'Influenza', color: '#fbbf24', label: 'FLU' },
-  RSV: { key: 'RSV', edKey: 'RSV', color: '#4ade80', label: 'RSV' },
-  PIV: { key: 'PIV', color: '#f97316', label: 'PARAINFLU' },
-  HMPV: { key: 'HMPV', color: '#a78bfa', label: 'HMPV' },
-  Adenovirus: { key: 'Adenovirus', color: '#f472b6', label: 'ADENO' },
-  'RV/EV': { key: 'RV/EV', color: '#94a3b8', label: 'RHINO/ENTERO' },
-  HCOV: { key: 'HCOV', color: '#64748b', label: 'SEASONAL HCOV' },
+  'COVID-19': { key: 'COVID-19', edKey: 'COVID', color: '#3987e5', label: 'COVID' },
+  Influenza: { key: 'Influenza', edKey: 'Influenza', color: '#d95926', label: 'FLU' },
+  RSV: { key: 'RSV', edKey: 'RSV', color: '#199e70', label: 'RSV' },
+  PIV: { key: 'PIV', color: '#c98500', label: 'PARAINFLU' },
+  HMPV: { key: 'HMPV', color: '#d55181', label: 'HMPV' },
+  Adenovirus: { key: 'Adenovirus', color: '#008300', label: 'ADENO' },
+  'RV/EV': { key: 'RV/EV', color: '#9085e9', label: 'RHINO/ENTERO' },
+  HCOV: { key: 'HCOV', color: '#e66767', label: 'SEASONAL HCOV' },
   Combined: { key: 'Combined', edKey: 'ARI', color: '#e2e8f0', label: 'COMBINED' },
 };
 

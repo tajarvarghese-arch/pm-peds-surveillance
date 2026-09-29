@@ -253,7 +253,7 @@ function channelPanel(chStore, mainTotal, lastFull) {
               <td class="num"><strong>${denom.value.toLocaleString()}</strong></td>
               <td class="num">100%</td></tr>` : ''}
             ${rates.map((r) => `<tr>
-              <td style="color:#7f8ea0">${r.label}</td>
+              <td style="color:#a3b3c5">${r.label}</td>
               <td class="num" colspan="2">${r.value <= 1.5 ? (r.value * 100).toFixed(1) + '%' : r.value.toLocaleString()}</td>
             </tr>`).join('')}</tbody>
           </table>
@@ -261,7 +261,7 @@ function channelPanel(chStore, mainTotal, lastFull) {
             <strong>Majority of demand arrives through “${channels[0].label}”.</strong> The larger that
             share, the more volume is funnel-shaped — bookable, forecastable, and smoothable — and the
             less of the week is at the mercy of the walk-in surge.</div>` : ''}
-          ${chStore.filterText ? `<div class="note" style="color:#4b5a6b">Export window per its own
+          ${chStore.filterText ? `<div class="note" style="color:#8797a9">Export window per its own
             filters: ${chStore.filterText.replace(/^applied filters:?\s*/i, '')}</div>` : ''}
           ${mainTotal ? `<div class="note gap">Not reconciled against the weekly file: the two exports
             carry different date windows (this one per its filters above; the weekly file through
@@ -297,7 +297,7 @@ function businessSection(catYoY, catStats, statTotal, floorStat, peakWeekFloor, 
             <tbody>${catYoY.map((c) => `<tr>
               <td><span style="color:${CAT_COLORS[c.c] || '#94a3b8'}">■</span> ${c.c}</td>
               <td class="num">${c.cur ? c.cur.toLocaleString() : '--'}</td>
-              <td class="num" style="color:#7f8ea0">${c.prv ? c.prv.toLocaleString() : '--'}</td>
+              <td class="num" style="color:#a3b3c5">${c.prv ? c.prv.toLocaleString() : '--'}</td>
               <td class="num ${c.pct === null ? '' : c.pct < 0 ? 's-watch' : 's-ok'}">
                 ${c.pct === null ? '--' : `${c.pct > 0 ? '+' : ''}${c.pct.toFixed(1)}%`}</td>
             </tr>`).join('')}</tbody>
@@ -335,14 +335,14 @@ function businessSection(catYoY, catStats, statTotal, floorStat, peakWeekFloor, 
             <tbody>${momentum.map((x) => `<tr>
               <td>${x.t.length > 30 ? x.t.slice(0, 29) + '…' : x.t}</td>
               <td class="num">${x.m.now.toLocaleString()}</td>
-              <td class="num" style="color:#7f8ea0">${x.m.then.toLocaleString()}</td>
+              <td class="num" style="color:#a3b3c5">${x.m.then.toLocaleString()}</td>
               <td class="num ${x.m.pct === null ? '' : x.m.pct < -5 ? 's-watch' : x.m.pct > 5 ? 's-ok' : ''}">
                 ${x.m.pct === null ? '--' : `${x.m.pct > 0 ? '+' : ''}${x.m.pct.toFixed(1)}%`}</td>
             </tr>`).join('')}
             ${momTotal ? `<tr style="border-top:1px solid var(--line-hot)">
               <td><strong>TOTAL</strong></td>
               <td class="num"><strong>${momTotal.now.toLocaleString()}</strong></td>
-              <td class="num" style="color:#7f8ea0">${momTotal.then.toLocaleString()}</td>
+              <td class="num" style="color:#a3b3c5">${momTotal.then.toLocaleString()}</td>
               <td class="num"><strong>${momTotal.pct > 0 ? '+' : ''}${momTotal.pct.toFixed(1)}%</strong></td>
             </tr>` : ''}</tbody>
           </table>
@@ -425,7 +425,7 @@ function integrationSection(fit, envYoY, yoyTotal, residStreak, matrix, pathSeri
           <td>${m.t.length > 28 ? m.t.slice(0, 27) + '…' : m.t}</td>
           ${m.cells.map((c) => `<td class="num ${c.r !== null && Math.abs(c.r) >= 0.7 ? (c.r > 0 ? 's-elevated' : 's-ok') : ''}">
             ${c.r === null ? '·' : c.r.toFixed(2)}</td>`).join('')}
-          <td style="text-align:left;color:#7f8ea0;font-size:10px">
+          <td style="text-align:left;color:#a3b3c5;font-size:12px">
             ${m.best && Math.abs(m.best.r) >= 0.5
               ? `${m.best.r > 0 ? 'tracks' : 'inverse to'} ${m.best.name}`
               : 'no strong pathogen link'}</td>
@@ -628,7 +628,7 @@ function privacyBar(store, acStore, chStore) {
       <span class="sub">${files}</span></h2>
     <div class="panel-body">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <div style="flex:1;min-width:260px;font-size:11.5px;line-height:1.6;color:#7f8ea0">
+        <div style="flex:1;min-width:260px;font-size:13px;line-height:1.6;color:#a3b3c5">
           This site is static — no server, no upload endpoint. Workbooks are read in the page and kept
           in this browser's local storage only. An ICD-coded export is detected automatically and
           stored alongside the visit-type file, so both analyses run together.
@@ -648,14 +648,14 @@ function uploadPrompt() {
   return `<section class="panel">
     <h2>Load PM Pediatrics visit data <span class="sub">stays in this browser</span></h2>
     <div class="panel-body">
-      <div style="font-size:12px;line-height:1.7;margin-bottom:12px">
+      <div style="font-size:13.5px;line-height:1.7;margin-bottom:12px">
         Pick the visits-by-type spreadsheet (and, optionally, the ICD-coded acuity export — it is
         recognised automatically). <strong>Nothing is uploaded.</strong> This site is static; there is
         no server to receive a file. Workbooks are parsed in the page and stored in this browser only.
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="ghost" id="v-replace" style="border-color:#22d3ee;color:#22d3ee">choose spreadsheet…</button>
-        <span style="color:#4b5a6b;font-size:10.5px">.xlsx, .xls or .csv · matrix crosstabs and long exports both work</span>
+        <span style="color:#8797a9;font-size:12.5px">.xlsx, .xls or .csv · matrix crosstabs and long exports both work</span>
       </div>
       <input type="file" id="v-file" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
       <div id="v-status" class="note" style="display:none"></div>
@@ -744,7 +744,7 @@ function validationPanel(xcLevel, xcGrowth, overlap, controls) {
     <div class="panel-body">
       <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         ${levelBadge(verdict.t, verdict.c)}
-        <div style="font-size:11px;color:#7f8ea0">
+        <div style="font-size:12.5px;color:#a3b3c5">
           growth-rate peak <strong>${G ? `r=${G.r.toFixed(2)} @ ${G.lag > 0 ? '+' : ''}${G.lag}w` : '--'}</strong>
           · level peak <strong>${L ? `r=${L.r.toFixed(2)} @ ${L.lag > 0 ? '+' : ''}${L.lag}w` : '--'}</strong>
         </div>
@@ -753,10 +753,10 @@ function validationPanel(xcLevel, xcGrowth, overlap, controls) {
         <thead><tr><th>Category</th><th>Visits</th><th>Level r</th><th>Lag</th><th>Growth r</th></tr></thead>
         <tbody>${controls.map((c) => `<tr>
           <td>${c.respiratory ? `<strong class="s-ok">${c.name}</strong>` : c.name}
-            ${!c.respiratory && Math.abs(c.L?.r ?? 0) < 0.3 ? ' <span class="badge" style="color:#7f8ea0">control</span>' : ''}</td>
+            ${!c.respiratory && Math.abs(c.L?.r ?? 0) < 0.3 ? ' <span class="badge" style="color:#a3b3c5">control</span>' : ''}</td>
           <td class="num">${c.n.toLocaleString()}</td>
           <td class="num ${(c.L?.r ?? 0) > 0.6 ? 's-elevated' : ''}">${c.L ? c.L.r.toFixed(2) : '--'}</td>
-          <td class="num" style="color:#7f8ea0">${c.L ? `${c.L.lag > 0 ? '+' : ''}${c.L.lag}w` : '--'}</td>
+          <td class="num" style="color:#a3b3c5">${c.L ? `${c.L.lag > 0 ? '+' : ''}${c.L.lag}w` : '--'}</td>
           <td class="num">${c.G ? c.G.r.toFixed(2) : '--'}</td>
         </tr>`).join('')}</tbody>
       </table>

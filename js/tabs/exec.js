@@ -1,7 +1,7 @@
 // Executive summary: one screen that answers "do I need more staff soon?"
 
 import { panel, tile, num, delta, levelBadge, labelsFrom, valuesFrom, empty } from '../ui.js';
-import { line, bar, hexA, sparkline } from '../charts.js';
+import { line, bar, hexA, sparkline, SERIES, AGE_COLORS } from '../charts.js';
 import { PATHOGENS, PED_AGES, MARKETS } from '../config.js';
 import { pressureIndex, staffing, d1, d2, seasonalBands, isoWeek, seasonOf, percentileRank,
   indexQuantum, wastewaterSignal, corroborate, quantile } from '../derive.js';
@@ -156,7 +156,7 @@ export default function exec(root, ctx) {
         `<div style="display:flex;gap:6px;margin-bottom:6px">
            <button class="ghost" id="ov-lin" aria-pressed="${!ctx.overlayLog}">linear</button>
            <button class="ghost" id="ov-log" aria-pressed="${!!ctx.overlayLog}">log</button>
-           <span style="margin-left:auto;color:#4b5a6b;font-size:10px;align-self:center">
+           <span style="margin-left:auto;color:#8797a9;font-size:12px;align-self:center">
              this series spans ~35× floor to peak</span>
          </div>
          <div class="chart-wrap tall"><canvas id="c-overlay"></canvas></div>
@@ -193,24 +193,27 @@ export default function exec(root, ctx) {
       backgroundColor: hexA('#22d3ee', 0.10), pointRadius: 0, fill: '-1' },
   ];
   if (prevSeason) {
-    ds.push({ label: prevSeason, data: pick(prevSeason), borderColor: '#7f8ea0',
-              borderDash: [4, 3], backgroundColor: 'transparent' });
+    ds.push({ label: `${prevSeason} (last season)`, shortLabel: prevSeason, data: pick(prevSeason),
+              borderColor: SERIES.context, borderDash: [5, 4], backgroundColor: 'transparent' });
   }
-  ds.push({ label: `${curSeason} (current)`, data: pick(curSeason), borderColor: '#22d3ee',
-            borderWidth: 2.2, backgroundColor: 'transparent' });
+  ds.push({ label: `${curSeason} (current)`, data: pick(curSeason), borderColor: SERIES.focus,
+            emphasis: true, backgroundColor: 'transparent' });
 
   line(document.getElementById('c-overlay'), {
     labels: axis.map((w) => `w${w}`),
     datasets: ds,
     options: {
+      unit: '%',
       scales: {
+        x: { ticks: { callback(v, i) { const m = MONTH_TICKS.find((t) => t.at === i); return m ? m.label : null; },
+          autoSkip: false } },
         y: {
           // Logarithmic gives proportional moves equal visual weight, which is
           // the only way an off-season ramp near 0.6% is legible on an axis
           // that must also hold a 23% winter peak.
           type: ctx.overlayLog ? 'logarithmic' : 'linear',
           title: { display: true, text: `% ED visits${ctx.overlayLog ? ' (log)' : ''}`,
-            color: '#4b5a6b', font: { family: 'monospace', size: 9 } },
+            color: '#8797a9', font: { family: 'monospace', size: 9 } },
         },
       },
     },
@@ -229,9 +232,10 @@ export default function exec(root, ctx) {
     datasets: PED_AGES.map((age, i) => ({
       label: age,
       data: recent.map((r) => r[`Combined|${age}`] ?? null),
-      borderColor: ['#ef4444', '#f97316', '#22d3ee'][i],
+      borderColor: AGE_COLORS[i],
       backgroundColor: 'transparent',
     })),
+    options: { unit: '%' },
   });
 }
 
@@ -364,7 +368,7 @@ function methodPanel(edAge, ctx, alert, quantum) {
     <h2>What the Pediatric Pressure Index is
       <span class="sub">this dashboard's construct, not a CDC metric</span></h2>
     <div class="panel-body">
-      <div style="font-size:12px;line-height:1.6;margin-bottom:10px">
+      <div style="font-size:13.5px;line-height:1.6;margin-bottom:10px">
         The share of <strong>pediatric emergency department visits that are respiratory</strong>,
         from CDC NSSP <code>7xva-uux8</code>, weighted across three age bands. It exists because the
         metric the original plan was keyed to — CDC ILINet's outpatient ILI % — no longer publishes a
@@ -465,22 +469,22 @@ function topographyPanel(ppi) {
   // Older seasons recede in brightness as well as depth.
   const ridges = priorKeys.map((k, i) => {
     const t = priorKeys.length === 1 ? 1 : i / (priorKeys.length - 1);
-    const a = 0.30 + t * 0.45;
+    const a = 0.55 + t * 0.40;
     return {
       key: k, label: k, values: seasons.get(k),
-      color: `rgba(127,142,160,${a.toFixed(2)})`,
-      fill: `rgba(45,63,82,${(0.18 + t * 0.22).toFixed(2)})`,
-      width: 0.9, current: false,
+      color: `rgba(180,194,209,${a.toFixed(2)})`,
+      fill: `rgba(70,95,122,${(0.30 + t * 0.25).toFixed(2)})`,
+      width: 1.4, current: false,
     };
   });
   ridges.push({
     key: 'median', label: 'prior median', values: ghost,
-    color: 'rgba(251,191,36,0.85)', fill: 'rgba(251,191,36,0.07)',
-    width: 1.1, dash: '2.5 2', current: false,
+    color: '#fbbf24', fill: 'rgba(251,191,36,0.10)',
+    width: 1.6, dash: '5 4', current: false,
   });
   ridges.push({
     key: currentKey, label: currentKey, values: seasons.get(currentKey),
-    color: '#22d3ee', fill: 'rgba(34,211,238,0.22)', width: 1.8, current: true,
+    color: '#22d3ee', fill: 'rgba(34,211,238,0.28)', width: 2.6, current: true,
   });
 
   const devCls = !dev ? '' : dev.latest.dev < -25 ? 's-ok'
@@ -507,10 +511,10 @@ function topographyPanel(ppi) {
         <td>w${r.w}</td>
         <td class="num">${num(r.cur, 3, '%')}</td>
         <td class="num" style="color:#fbbf24">${num(r.med, 3, '%')}</td>
-        <td class="num" style="color:#4b5a6b">${num(r.lo, 2)}–${num(r.hi, 2)}</td>
+        <td class="num" style="color:#8797a9">${num(r.lo, 2)}–${num(r.hi, 2)}</td>
         <td class="num ${r.dev < -25 ? 's-ok' : r.dev > 25 ? 's-critical' : 's-watch'}">
           ${r.dev > 0 ? '+' : ''}${r.dev.toFixed(0)}%</td>
-        <td class="num" style="color:#4b5a6b">${r.n}</td>
+        <td class="num" style="color:#8797a9">${r.n}</td>
       </tr>`).join('')}</tbody>
     </table>`;
 
@@ -522,13 +526,13 @@ function topographyPanel(ppi) {
     <div class="panel-body">
       <div class="grid g-2-1">
         <div>
-          <div id="iso-host" style="height:340px"></div>
+          <div id="iso-host" style="height:420px"></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <button class="ghost" data-iso="-28,58">default</button>
+            <button class="ghost" data-iso="-22,40">default</button>
             <button class="ghost" data-iso="0,80">plan</button>
             <button class="ghost" data-iso="-60,35">raking</button>
             <button class="ghost" data-iso="0,22">side</button>
-            <span style="margin-left:auto;color:#4b5a6b;font-size:10px;align-self:center">
+            <span style="margin-left:auto;color:#8797a9;font-size:12px;align-self:center">
               drag the scene to rotate</span>
           </div>
         </div>
@@ -603,23 +607,26 @@ function mountRecent(ppi, quantum) {
     datasets: [
       ...priorSeries.map((s) => ({
         label: String(s.year), data: s.data,
-        borderColor: s.color, borderWidth: 1.2,
+        borderColor: s.color, borderWidth: 1.5, endLabel: false,
         backgroundColor: 'transparent', pointRadius: 0,
       })),
       ...(median.some((v) => v !== null) ? [{
         label: `${priorSeries.length}-yr median`, data: median,
-        borderColor: 'rgba(251,191,36,0.85)', borderDash: [4, 3], borderWidth: 1.3,
+        shortLabel: 'median',
+        borderColor: SERIES.reference, borderDash: [5, 4], borderWidth: 1.8,
         backgroundColor: 'transparent', pointRadius: 0,
       }] : []),
       {
         label: `${curYear} (current)`,
         data: tail.map((p) => +p.v.toFixed(4)),
-        borderColor: '#22d3ee', borderWidth: 2.4,
-        backgroundColor: hexA('#22d3ee', 0.12), fill: true,
-        pointRadius: 2.5, pointBackgroundColor: '#22d3ee',
+        shortLabel: String(curYear),
+        borderColor: SERIES.focus, emphasis: true,
+        backgroundColor: hexA(SERIES.focus, 0.10), fill: true,
+        pointRadius: 3, pointBackgroundColor: SERIES.focus,
       },
     ],
     options: {
+      unit: '%',
       scales: {
         y: {
           // Pin the axis to the data range. Adding prior years widens the
@@ -628,7 +635,7 @@ function mountRecent(ppi, quantum) {
           min: Math.max(0, Math.floor(allMin * 0.85 * 100) / 100),
           max: Math.ceil(allMax * 1.05 * 100) / 100,
           title: { display: true, text: '% ED visits',
-            color: '#4b5a6b', font: { family: 'monospace', size: 9 } },
+            color: '#8797a9', font: { family: 'monospace', size: 9 } },
         },
       },
     },
@@ -647,15 +654,15 @@ function mountRecent(ppi, quantum) {
     datasets: [
       { label: 'WoW %', data: f.map((p) => (p.v === null ? null : +p.v.toFixed(2))),
         backgroundColor: f.map((p) => (p.noisy ? 'rgba(127,142,160,0.45)'
-          : p.v > 0 ? 'rgba(249,115,22,0.85)' : 'rgba(74,222,128,0.85)')) },
+          : p.v > 0 ? '#f97316' : '#4ade80')) },
       { label: 'resolution floor', type: 'line', data: noiseBand.slice(1),
-        borderColor: 'rgba(251,191,36,0.55)', borderDash: [3, 3], borderWidth: 1,
+        borderColor: SERIES.reference, borderDash: [4, 4], borderWidth: 1.5,
         pointRadius: 0, fill: false },
     ],
     options: {
-      plugins: { legend: { display: false } },
+      unit: '%',
       scales: { y: { title: { display: true, text: 'WoW %',
-        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } },
+        color: '#8797a9', font: { family: 'monospace', size: 9 } } } },
     },
   });
 }
@@ -663,7 +670,7 @@ function mountRecent(ppi, quantum) {
 function mountIso(ctx) {
   const host = document.getElementById('iso-host');
   if (!host || !window.__isoModel) return;
-  ctx.iso ||= { yaw: -28, pitch: 58 };
+  ctx.iso ||= { yaw: -22, pitch: 40 };
   const draw = () => {
     const svg = renderIso(host, window.__isoModel, ctx.iso);
     attachOrbit(svg, ctx.iso, () => draw());
@@ -711,7 +718,7 @@ function pathogenStatus(posNat, naat, edAge, region) {
       <td><span style="color:${p?.color || '#94a3b8'}">■</span> ${p?.label || name}</td>
       <td class="num">${num(val, 2, '%')}</td>
       <td class="num">${delta(chg)}</td>
-      <td style="text-align:left;color:#4b5a6b;font-size:10px">${src}${extra}</td>
+      <td style="text-align:left;color:#8797a9;font-size:12px">${src}${extra}</td>
     </tr>`);
   };
 
@@ -729,8 +736,8 @@ function pathogenStatus(posNat, naat, edAge, region) {
   }
   rows.push(`<tr>
     <td><span style="color:#f97316">■</span> iGAS / STREP A</td>
-    <td class="num" colspan="2" style="color:#4b5a6b">annual only</td>
-    <td style="text-align:left;color:#4b5a6b;font-size:10px">ABCs 9y49-tura — no weekly feed exists</td>
+    <td class="num" colspan="2" style="color:#8797a9">annual only</td>
+    <td style="text-align:left;color:#8797a9;font-size:12px">ABCs 9y49-tura — no weekly feed exists</td>
   </tr>`);
 
   return `<table class="dt">

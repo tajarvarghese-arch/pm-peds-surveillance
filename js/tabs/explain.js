@@ -123,7 +123,7 @@ export default function explain(root, ctx) {
       signals.length ? `<div class="grid g2">${signals.map((s) => `
         <div class="tile">
           <div class="label">${levelBadge(s.level.toUpperCase(), s.level)}</div>
-          <div style="font-size:13px;font-weight:700;margin:6px 0 4px">${s.headline}</div>
+          <div style="font-size:14px;font-weight:700;margin:6px 0 4px">${s.headline}</div>
           <div class="foot" style="line-height:1.5">${s.detail}</div>
         </div>`).join('')}</div>` : empty('no anomalies detected'))}
 
@@ -172,7 +172,7 @@ function immunityWall(check) {
     <td>${p.prior}${p.priorComplete ? '' : ' <span class="s-watch">*</span>'}</td>
     <td class="num">${num(p.priorPeak, 2, '%')}</td>
     <td class="num">${num(p.priorCumulative, 0)}</td>
-    <td style="color:#4b5a6b">→</td>
+    <td style="color:#8797a9">→</td>
     <td>${p.next}</td>
     <td class="num">${num(p.nextEarly, 3, '%')}</td>
   </tr>`).join('');
@@ -180,7 +180,7 @@ function immunityWall(check) {
   return `
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       ${levelBadge(verdict.t, verdict.c)}
-      <div style="font-size:11px;color:#7f8ea0">
+      <div style="font-size:12.5px;color:#a3b3c5">
         Spearman ρ (prior peak → next early) =
         <strong class="${rhoPeak !== null && rhoPeak < 0 ? 's-ok' : ''}">${rhoPeak === null ? '--' : rhoPeak.toFixed(2)}</strong>
         · (prior cumulative → next early) =
@@ -235,10 +235,10 @@ function topicList(topics, active) {
     const items = (t.items || []).slice(0, 6);
     return `<div style="border:1px solid ${isActive ? '#2d3f52' : '#1e2936'};margin-bottom:8px">
       <div data-topic="${t.id}" style="padding:8px 10px;cursor:pointer;background:${isActive ? '#10161d' : 'transparent'};display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        ${isActive ? levelBadge('SIGNAL ACTIVE', 'watch') : '<span class="badge" style="color:#4b5a6b">context</span>'}
-        <strong style="font-size:12px">${t.label}</strong>
-        <span style="color:#7f8ea0;font-size:10.5px">${t.question || ''}</span>
-        <span style="margin-left:auto;color:#4b5a6b;font-size:10px">
+        ${isActive ? levelBadge('SIGNAL ACTIVE', 'watch') : '<span class="badge" style="color:#8797a9">context</span>'}
+        <strong style="font-size:13.5px">${t.label}</strong>
+        <span style="color:#a3b3c5;font-size:12.5px">${t.question || ''}</span>
+        <span style="margin-left:auto;color:#8797a9;font-size:12px">
           ${t.hitCount ? `${t.hitCount.toLocaleString()} papers · showing ${items.length}` : 'none found'}
         </span>
       </div>
@@ -247,11 +247,11 @@ function topicList(topics, active) {
           <tbody>${items.map((i) => `<tr>
             <td style="max-width:min(520px, 68vw)">
               <a href="${i.link}" target="_blank" rel="noopener">${i.title}</a>
-              <div style="color:#4b5a6b;font-size:10px;margin-top:2px">
+              <div style="color:#8797a9;font-size:12px;margin-top:2px">
                 ${i.journal || '--'}${i.open ? ' <span class="s-ok">· open access</span>' : ''}
               </div>
             </td>
-            <td class="num" style="color:#7f8ea0;white-space:nowrap;vertical-align:top">${(i.date || '').slice(0, 10)}</td>
+            <td class="num" style="color:#a3b3c5;white-space:nowrap;vertical-align:top">${(i.date || '').slice(0, 10)}</td>
           </tr>`).join('')}</tbody>
         </table>` : `<div class="empty">no matching papers</div>`}
       </div>

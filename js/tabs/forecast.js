@@ -38,7 +38,7 @@ export default function forecastTab(root, ctx) {
           ${Object.keys(targets).map((k) => `<option ${k === key ? 'selected' : ''}>${k}</option>`).join('')}
         </select>
       </label>
-      <span style="margin-left:auto;color:#4b5a6b;font-size:10.5px">
+      <span style="margin-left:auto;color:#8797a9;font-size:12.5px">
         seasonal-naive + damped momentum · horizon 8wk
       </span>
     </div>
@@ -96,12 +96,13 @@ export default function forecastTab(root, ctx) {
       { label: 'p25 band', data: [...new Array(tail.length).fill(null), ...fc.map((f) => f.lo)],
         borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false },
       { label: 'historical p25–p75', data: [...new Array(tail.length).fill(null), ...fc.map((f) => f.hi)],
-        borderColor: 'transparent', backgroundColor: hexA('#fbbf24', 0.12), pointRadius: 0, fill: '-1' },
+        borderColor: 'transparent', backgroundColor: hexA('#c9d3de', 0.13), pointRadius: 0, fill: '-1' },
       { label: 'observed', data: [...tail.map((p) => +p.v.toFixed(3)), ...new Array(fc.length).fill(null)],
-        borderColor: '#22d3ee', borderWidth: 2, backgroundColor: 'transparent' },
+        borderColor: '#22d3ee', borderWidth: 2.5, backgroundColor: 'transparent' },
       { label: 'forecast', data: [...pad, +tail.at(-1).v.toFixed(3), ...fc.map((f) => +f.v.toFixed(3))],
-        borderColor: '#fbbf24', borderDash: [5, 3], borderWidth: 2, backgroundColor: 'transparent' },
+        borderColor: '#22d3ee', borderDash: [6, 5], emphasis: true, backgroundColor: 'transparent' },
     ],
+    options: { unit: '%' },
   });
 
   const dLabels = (arr) => arr.map((p) => {
@@ -114,9 +115,10 @@ export default function forecastTab(root, ctx) {
     labels: dLabels(f40),
     datasets: [{
       label: 'd1 %', data: f40.map((p) => (p.v === null ? null : +p.v.toFixed(2))),
-      borderColor: '#a78bfa', backgroundColor: hexA('#a78bfa', 0.08), fill: true,
+      shortLabel: 'now',
+      borderColor: '#9085e9', backgroundColor: hexA('#9085e9', 0.10), fill: true,
     }],
-    options: { plugins: { legend: { display: false } } },
+    options: { unit: '%', plugins: { legend: { display: false } } },
   });
 
   const s40 = second.slice(-40);
@@ -124,9 +126,10 @@ export default function forecastTab(root, ctx) {
     labels: dLabels(s40),
     datasets: [{
       label: 'd2 pp', data: s40.map((p) => (p.v === null ? null : +p.v.toFixed(2))),
-      borderColor: '#f97316', backgroundColor: hexA('#f97316', 0.08), fill: true,
+      shortLabel: 'now',
+      borderColor: '#d55181', backgroundColor: hexA('#d55181', 0.10), fill: true,
     }],
-    options: { plugins: { legend: { display: false } } },
+    options: { unit: 'pp', plugins: { legend: { display: false } } },
   });
 }
 
@@ -139,7 +142,7 @@ function derivTable(points, first, second) {
     const b = d2map.get(p.t) ?? null;
     const noisy = noisyMap.get(p.t) === true;
     const state = a === null ? '--'
-      : noisy ? '<span style="color:#4b5a6b">below resolution</span>'
+      : noisy ? '<span style="color:#8797a9">below resolution</span>'
       : a > 0 && b > 0 ? '<span class="s-critical">accelerating</span>'
       : a > 0 && b <= 0 ? '<span class="s-watch">rising, flattening</span>'
       : a <= 0 && b > 0 ? '<span class="s-watch">falling, decelerating</span>'
@@ -165,8 +168,8 @@ function fcTable(fc) {
     <tbody>${fc.map((f) => `<tr>
       <td>${f.t}</td>
       <td class="num">${num(f.v, 3, '%')}</td>
-      <td class="num" style="color:#7f8ea0">${num(f.lo, 3, '%')}</td>
-      <td class="num" style="color:#7f8ea0">${num(f.hi, 3, '%')}</td>
+      <td class="num" style="color:#a3b3c5">${num(f.lo, 3, '%')}</td>
+      <td class="num" style="color:#a3b3c5">${num(f.hi, 3, '%')}</td>
       <td class="num ${f.n < 3 ? 's-critical' : f.n < 4 ? 's-watch' : ''}">${f.n}</td>
     </tr>`).join('')}</tbody></table>`;
 }

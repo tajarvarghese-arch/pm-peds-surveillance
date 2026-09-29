@@ -93,7 +93,7 @@ export default function report(root) {
   const store = load();
   if (!store?.data?.length) {
     root.innerHTML = panel('The Seasonal Engine', 'no visit data in this browser',
-      `<div style="font-size:12px;line-height:1.8">
+      `<div style="font-size:13.5px;line-height:1.8">
         This report is computed entirely in your browser from the exports loaded on the
         <a href="#volumes"><strong>Volumes ▪</strong></a> tab. Nothing is uploaded anywhere.
         <div class="note" style="margin-top:8px">Load, in any order — each unlocks more of the report:
@@ -579,7 +579,7 @@ export default function report(root) {
       <div class="panel-body">
         ${trimmed ? `<div class="note gap"><strong>Partial trailing week (${trimmed.t}) excluded
           from every figure.</strong></div>` : ''}
-        ${findings.length ? `<ol style="margin:4px 0 0 18px;font-size:12px;line-height:1.8">
+        ${findings.length ? `<ol style="margin:4px 0 0 18px;font-size:13.5px;line-height:1.8">
           ${findings.map((f) => `<li style="margin-bottom:6px">${f}</li>`).join('')}</ol>`
         : '<div class="note">Not enough history yet for headline findings — load a longer export.</div>'}
       </div>
@@ -847,7 +847,7 @@ export default function report(root) {
             <tbody>${funnel.regions.map((r) => `<tr>
               <td>${r.region.length > 26 ? r.region.slice(0, 25) + '…' : r.region}</td>
               <td class="num ${r.pct < 0 ? 's-watch' : 's-ok'}">${fmtPct(r.pct)}</td>
-              <td class="num" style="color:#7f8ea0">${r.rate != null ? r.rate.toFixed(1) + '%' : '--'}</td>
+              <td class="num" style="color:#a3b3c5">${r.rate != null ? r.rate.toFixed(1) + '%' : '--'}</td>
             </tr>`).join('')}</tbody>
           </table></div>
           <div class="note">Ranked worst to best on paired weeks. A decline that is universal across regions
@@ -894,7 +894,7 @@ export default function report(root) {
     <div style="height:10px"></div>
 
     ${panel('What this data cannot tell you', 'read before quoting numbers upstream', `
-      <ul style="margin:0 0 0 18px;font-size:11.5px;line-height:1.9;color:${DIM}">
+      <ul style="margin:0 0 0 18px;font-size:13px;line-height:1.9;color:${DIM}">
         <li>The acuity numerator and the visit denominator count different things under different
           filters — the per-1,000 figure is an index, not a rate.</li>
         <li>Site geography and market groupings are not in the data; any regional reading is inference
@@ -937,7 +937,7 @@ function phaseHeatmap(phased) {
   return `<div style="display:grid;grid-template-columns:190px 1fr;gap:2px 0;min-width:640px">
     ${rowsHtml}
     <div></div>
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:${DIM};padding-top:2px">
+    <div style="display:flex;justify-content:space-between;font-size:11.5px;color:${DIM};padding-top:2px">
       <span>Jan</span><span>Apr</span><span>Jul</span><span>Oct</span><span>Dec</span></div>
   </div>`;
 }

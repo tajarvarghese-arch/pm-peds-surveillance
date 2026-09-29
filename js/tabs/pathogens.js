@@ -1,7 +1,7 @@
 // Per-pathogen deep dive: positivity, ED share, hospitalisation severity.
 
 import { panel, num, delta, empty, labelsFrom, valuesFrom } from '../ui.js';
-import { line, hexA } from '../charts.js';
+import { line, hexA, AGE_COLORS } from '../charts.js';
 import { PATHOGENS, MARKETS } from '../config.js';
 import { d1, d2, percentileRank } from '../derive.js';
 import { rerender } from '../app.js';
@@ -20,8 +20,8 @@ export default function pathogens(root, ctx) {
           ${MARKETS.regions.map((r) => `<option ${r === ctx.region ? 'selected' : ''}>${r}</option>`).join('')}
         </select>
       </label>
-      <span style="color:#4b5a6b;font-size:10.5px">${MARKETS.regionNote[ctx.region] || ''}</span>
-      <span style="margin-left:auto;color:#4b5a6b;font-size:10.5px">
+      <span style="color:#8797a9;font-size:12.5px">${MARKETS.regionNote[ctx.region] || ''}</span>
+      <span style="margin-left:auto;color:#8797a9;font-size:12.5px">
         positivity = NAAT % positive · ED share = % of pediatric ED visits
       </span>
     </div>
@@ -61,9 +61,10 @@ export default function pathogens(root, ctx) {
       label: PATHOGENS[k].label,
       data: recent.map((r) => r[k] ?? null),
       borderColor: PATHOGENS[k].color,
-      backgroundColor: hexA(PATHOGENS[k].color, 0.06),
+      backgroundColor: hexA(PATHOGENS[k].color, 0.08),
       fill: true,
     })),
+    options: { unit: '%' },
   });
 
   // secondary
@@ -77,16 +78,17 @@ export default function pathogens(root, ctx) {
       borderColor: PATHOGENS[k].color,
       backgroundColor: 'transparent',
     })),
+    options: { unit: '%' },
   });
 
   // hospitalisation
   const rec3 = respnet.slice(-104);
   const hospKeys = [
-    ['Combined|0-<1 yr', '#ef4444', '<1 yr all'],
-    ['Combined|1-4 yr', '#f97316', '1-4 yr all'],
-    ['Combined|5-17 yr', '#22d3ee', '5-17 yr all'],
-    ['RSV-NET|0-<1 yr', '#4ade80', '<1 yr RSV'],
-    ['COVID-NET|0-<1 yr', '#a78bfa', '<1 yr COVID'],
+    ['Combined|0-<1 yr', AGE_COLORS[0], '<1 yr all'],
+    ['Combined|1-4 yr', AGE_COLORS[1], '1-4 yr all'],
+    ['Combined|5-17 yr', AGE_COLORS[2], '5-17 yr all'],
+    ['RSV-NET|0-<1 yr', PATHOGENS.RSV.color, '<1 yr RSV'],
+    ['COVID-NET|0-<1 yr', PATHOGENS['COVID-19'].color, '<1 yr COVID'],
   ];
   line(document.getElementById('c-hosp'), {
     labels: labelsFrom(rec3.map((r) => ({ t: r.date })), 'year'),
@@ -95,8 +97,9 @@ export default function pathogens(root, ctx) {
       data: rec3.map((r) => r[k] ?? null),
       borderColor: c,
       backgroundColor: 'transparent',
-      borderDash: k.startsWith('Combined') ? [] : [3, 3],
+      borderDash: k.startsWith('Combined') ? [] : [5, 4],
     })),
+    options: { scales: { y: { title: { display: true, text: 'admissions per 100k' } } } },
   });
 }
 
@@ -144,8 +147,8 @@ function scorecard(naat, posNat, region) {
         <td class="num">${delta(r.d1)}</td>
         <td class="num">${delta(r.d2, { suffix: 'pp' })}</td>
         <td class="num ${hot}">${num(r.pct, 0)}</td>
-        <td class="num" style="color:#4b5a6b">${r.n}</td>
-        <td style="text-align:left;color:#4b5a6b;font-size:10px">${r.src}</td>
+        <td class="num" style="color:#8797a9">${r.n}</td>
+        <td style="text-align:left;color:#8797a9;font-size:12px">${r.src}</td>
       </tr>`;
     }).join('')}</tbody></table>
     <div class="note">Percentile is rank against that series' own available history — not a
@@ -171,10 +174,10 @@ function igasPanel(igas) {
     return `<tr>
       <td>${y}</td>
       <td class="num">${v.toLocaleString()}</td>
-      <td style="text-align:left"><div style="height:8px;width:${w.toFixed(0)}%;background:#f97316"></div></td>
+      <td style="text-align:left"><div class="bar-x" style="height:10px;border-radius:0 3px 3px 0;width:${w.toFixed(0)}%;background:#3987e5"></div></td>
     </tr>`;
   }).join('');
-  return `<div class="scroll-y" style="max-height:200px"><table class="dt">
+  return `<div class="scroll-y" style="max-height:330px"><table class="dt">
     <thead><tr><th>Year</th><th>Est. cases</th><th style="text-align:left">vs peak</th></tr></thead>
     <tbody>${rows}</tbody></table></div>
     <div class="note gap">Latest ABCs year is <strong>${last}</strong>. This is an annual burden series,

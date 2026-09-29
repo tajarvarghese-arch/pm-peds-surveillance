@@ -2,7 +2,7 @@
 // Honest about depth -- NSSP starts 2022-09, NAAT positivity starts 2019-07.
 
 import { panel, num, empty } from '../ui.js';
-import { heatColor } from '../charts.js';
+import { heatColor, heatLegend } from '../charts.js';
 import { PATHOGENS, MARKETS, PROVENANCE_GAPS } from '../config.js';
 import { isoWeek, seasonOf, correlate, pressureIndex } from '../derive.js';
 import { noteGap } from '../ui.js';
@@ -76,7 +76,7 @@ function heatmap(points) {
       return `<div class="heat-cell" style="background:${heatColor(t)}" title="${title}"></div>`;
     }).join('');
     return `<div class="heat-row-label">${s}</div>
-            <div style="display:grid;${cols}">${cells}</div>`;
+            <div class="heat" style="${cols.replace('gap:1px', 'gap:2px')}">${cells}</div>`;
   }).join('');
 
   const monthTicks = ['Jul', 'Sep', 'Nov', 'Jan', 'Mar', 'May'];
@@ -85,13 +85,14 @@ function heatmap(points) {
         <div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:1px 0;align-items:center">${rows}</div>
         <div style="display:grid;grid-template-columns:52px minmax(0,1fr);margin-top:4px">
           <div></div>
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:#4b5a6b">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:#8797a9">
             ${monthTicks.map((m) => `<span>${m}</span>`).join('')}
           </div>
         </div>
       </div>
     </div>
-    <div class="note">Scale ${min.toFixed(2)}% → ${max.toFixed(2)}%. Week-of-season axis runs w27→w26.
+    ${heatLegend(min, max)}
+    <div class="note">Hover a cell for its value. Scale ${min.toFixed(2)}% → ${max.toFixed(2)}%. Week-of-season axis runs w27→w26.
     Only ${seasons.length} seasons exist; a "typical year" cannot be inferred from this yet.</div>`;
 }
 
@@ -115,8 +116,8 @@ function peaks(points) {
       <td>${r.s}${r.n < complete ? ' <span style="color:#fbbf24">*</span>' : ''}</td>
       <td class="num">${num(r.peak, 2, '%')}</td>
       <td class="num">w${r.week}</td>
-      <td class="num" style="color:#7f8ea0">${r.when}</td>
-      <td style="text-align:left"><div style="height:8px;width:${((r.peak / max) * 100).toFixed(0)}%;background:#22d3ee"></div></td>
+      <td class="num" style="color:#a3b3c5">${r.when}</td>
+      <td style="text-align:left"><div class="bar-x" style="height:10px;border-radius:0 3px 3px 0;width:${((r.peak / max) * 100).toFixed(0)}%;background:#22d3ee"></div></td>
     </tr>`).join('')}</tbody></table>
     <div class="note"><span class="s-watch">*</span> partial season — fewer than 52 weeks observed,
     so the peak may not have happened yet (or the record starts mid-season).</div>`;
@@ -136,9 +137,9 @@ function corrMatrix(naat, posNat, region) {
   const head = keys.map((k) => `<th>${PATHOGENS[k]?.label || k}</th>`).join('');
   const rows = keys.map((a) => {
     const cells = keys.map((b) => {
-      if (a === b) return `<td class="num" style="color:#4b5a6b">1.00</td>`;
+      if (a === b) return `<td class="num" style="color:#8797a9">1.00</td>`;
       const { r, n } = correlate(series[a], series[b]);
-      if (r === null) return `<td class="num" style="color:#4b5a6b">--</td>`;
+      if (r === null) return `<td class="num" style="color:#8797a9">--</td>`;
       const mag = Math.abs(r);
       const col = r > 0 ? `rgba(239,68,68,${(mag * 0.55).toFixed(2)})`
                         : `rgba(74,222,128,${(mag * 0.55).toFixed(2)})`;

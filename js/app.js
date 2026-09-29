@@ -135,7 +135,7 @@ async function probeFreshness() {
   const remote = await freshness('ed_state', 'date');
 
   if (!remote) {
-    box.innerHTML = '<span style="color:#4b5a6b">live probe unavailable</span>';
+    box.innerHTML = '<span style="color:#8797a9">live probe unavailable</span>';
     if (buildAge !== null && buildAge > 10) staleBanner({ buildAge, behind: null, remote: null });
     return;
   }
@@ -146,7 +146,7 @@ async function probeFreshness() {
   if (behind && behind > 0) {
     box.innerHTML = `<span class="s-watch">CDC has newer (${remote}) — snapshot ${behind}d behind</span>`;
   } else {
-    box.innerHTML = `<span class="s-ok">in sync</span> <span style="color:#4b5a6b">CDC lag ${daysAgo(remote)}d</span>`;
+    box.innerHTML = `<span class="s-ok">in sync</span> <span style="color:#8797a9">CDC lag ${daysAgo(remote)}d</span>`;
   }
 
   // A build older than ~10 days means several scheduled runs were missed: the
@@ -188,7 +188,67 @@ function renderTabs() {
   }
 }
 
-export function select(id) {
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Entrance choreography. Blocks lift into place in reading order, tiles a beat
+ * after their row, and headline numbers count up to their value -- so the eye
+ * is led down the page rather than handed everything at once. Only on
+ * navigation: a control change re-renders in place without replaying it.
+ */
+function choreograph(root) {
+  root.classList.remove('enter');
+  if (REDUCED_MOTION) return;
+  [...root.children].forEach((el, i) => {
+    el.style.setProperty('--i', Math.min(i, 8));
+    el.querySelectorAll('.tile').forEach((t, j) => t.style.setProperty('--j', Math.min(j, 8)));
+    el.querySelectorAll('.heat').forEach((h, r) => h.style.setProperty('--r', r));
+  });
+  void root.offsetWidth;   // restart the animations
+  root.classList.add('enter');
+  countUp(root);
+}
+
+function countUp(root) {
+  const jobs = [];
+  root.querySelectorAll('.tile .value').forEach((el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) {
+      if (n.parentElement.closest('small')) continue;
+      const m = n.nodeValue.match(/\d[\d,]*(\.\d+)?/);
+      if (!m) continue;
+      const target = parseFloat(m[0].replace(/,/g, ''));
+      if (!Number.isFinite(target) || target === 0) break;
+      jobs.push({
+        n, full: n.nodeValue, head: n.nodeValue.slice(0, m.index),
+        tail: n.nodeValue.slice(m.index + m[0].length),
+        target, dp: m[1] ? m[1].length - 1 : 0, comma: m[0].includes(','),
+      });
+      break;
+    }
+  });
+  if (!jobs.length) return;
+  const t0 = performance.now();
+  const DUR = 900;
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / DUR);
+    const e = 1 - Math.pow(1 - t, 3);
+    for (const j of jobs) {
+      if (!j.n.isConnected) continue;
+      if (t >= 1) { j.n.nodeValue = j.full; continue; }
+      const v = j.target * e;
+      const txt = j.comma
+        ? v.toLocaleString('en-US', { minimumFractionDigits: j.dp, maximumFractionDigits: j.dp })
+        : v.toFixed(j.dp);
+      j.n.nodeValue = j.head + txt + j.tail;
+    }
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+export function select(id, { animate = true } = {}) {
   const tab = TABS.find((t) => t.id === id);
   if (!tab) return;
   destroyAll();
@@ -198,6 +258,8 @@ export function select(id) {
   view.innerHTML = '<div class="loading">rendering<span class="cursor"></span></div>';
   try {
     tab.mod(view, ctx);
+    if (animate) { choreograph(view); window.scrollTo({ top: 0 }); }
+    else view.classList.remove('enter');
   } catch (e) {
     console.error(e);
     view.innerHTML = `<div class="empty">tab "${id}" failed to render<br><span style="color:#ef4444">${e.message}</span></div>`;
@@ -207,7 +269,7 @@ export function select(id) {
 /** Tabs call this after mutating ctx via a control. */
 export function rerender() {
   const active = tabsEl.querySelector('[aria-selected="true"]');
-  if (active) select(active.dataset.id);
+  if (active) select(active.dataset.id, { animate: false });
 }
 
 window.addEventListener('hashchange', () => {

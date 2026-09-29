@@ -22,7 +22,7 @@ export function tile(label, value, foot, cls = '') {
 }
 
 export function num(v, dp = 2, suffix = '') {
-  if (v === null || v === undefined || Number.isNaN(v)) return '<span style="color:#4b5a6b">--</span>';
+  if (v === null || v === undefined || Number.isNaN(v)) return '<span style="color:#8797a9">--</span>';
   return `${(+v).toFixed(dp)}${suffix}`;
 }
 
@@ -33,7 +33,7 @@ export function delta(v, { dp = 1, suffix = '%', invert = false, noisy = false }
   // A move inside the published rounding step is not a direction.
   if (noisy) {
     return `<span class="delta flat" title="within reporting resolution (CDC publishes 1 decimal place)">
-      ≈ ${v > 0 ? '+' : ''}${v.toFixed(dp)}${suffix} <span style="color:#4b5a6b">noise</span></span>`;
+      ≈ ${v > 0 ? '+' : ''}${v.toFixed(dp)}${suffix} <span style="color:#8797a9">noise</span></span>`;
   }
   const rising = v > 0.5;
   const falling = v < -0.5;
@@ -65,5 +65,5 @@ export function empty(msg) {
 }
 
 export function noteGap(gap) {
-  return `<div class="note gap"><strong>${gap.wanted}</strong> — <span class="s-elevated">${gap.status}</span><br>${gap.detail}<br><span style="color:#7f8ea0">Substituted: ${gap.using}</span></div>`;
+  return `<div class="note gap"><strong>${gap.wanted}</strong> — <span class="s-elevated">${gap.status}</span><br>${gap.detail}<br><span style="color:#a3b3c5">Substituted: ${gap.using}</span></div>`;
 }

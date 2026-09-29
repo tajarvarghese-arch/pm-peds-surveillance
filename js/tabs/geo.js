@@ -1,7 +1,7 @@
 // Geography: NY/NJ/CT ED share, HHS region ranking, wastewater leading signal.
 
 import { panel, num, delta, empty, tile } from '../ui.js';
-import { line, hexA, sparkline } from '../charts.js';
+import { line, hexA, sparkline, STATE_COLORS } from '../charts.js';
 import { PATHOGENS, MARKETS } from '../config.js';
 import { d1, d2, indexToMedian, percentileRank, ordinal } from '../derive.js';
 import { toWeekly } from '../data.js';
@@ -27,7 +27,7 @@ export default function geo(root, ctx) {
           ${ED_PATHOGENS.map((p) => `<option ${p === path ? 'selected' : ''}>${p}</option>`).join('')}
         </select>
       </label>
-      <span style="color:#4b5a6b;font-size:10.5px">
+      <span style="color:#8797a9;font-size:12.5px">
         NSSP ED visit share · daily · all ages (no pediatric breakout exists at state level)
       </span>
     </div>
@@ -41,7 +41,7 @@ export default function geo(root, ctx) {
 
     <div class="grid g2">
       ${panel('HHS region ranking', 'NAAT positivity · latest week', regionRank(naat))}
-      ${panel('Wastewater — indexed to own baseline', 'CDC NWSS · replaces Biobot',
+      ${panel('SARS-CoV-2 in wastewater — last 2 years', 'CDC NWSS · each state vs its own median',
         `<div class="chart-wrap"><canvas id="c-ww"></canvas></div>
          <div class="note">Plotted as % of each state's own 2-year median, not raw copies/L.
          Absolute concentrations are not comparable across states — different labs, extraction
@@ -63,20 +63,21 @@ export default function geo(root, ctx) {
     datasets: geos.map((g, i) => ({
       label: MARKETS.abbr[g] || 'US',
       data: recent.map((r) => r[`${g}|${path}`] ?? null),
-      borderColor: ['#22d3ee', '#fbbf24', '#4ade80', '#64748b'][i],
-      borderWidth: g === 'United States' ? 1.2 : 1.8,
-      borderDash: g === 'United States' ? [4, 3] : [],
+      borderColor: STATE_COLORS[MARKETS.abbr[g] || 'US'],
+      borderWidth: g === 'United States' ? 1.6 : 2,
+      borderDash: g === 'United States' ? [5, 4] : [],
       backgroundColor: 'transparent',
     })),
+    options: { unit: '%' },
   });
 
   // wastewater, indexed
   const wwSeries = [];
-  for (const [ds, label, dash] of [[wwC, 'COVID', []], [wwF, 'FLU A', [4, 3]]]) {
-    for (const [st, color] of [['NY', '#22d3ee'], ['NJ', '#fbbf24'], ['CT', '#4ade80']]) {
+  for (const [ds, label, dash] of [[wwC, 'COVID', []]]) {
+    for (const [st, color] of [['NY', STATE_COLORS.NY], ['NJ', STATE_COLORS.NJ], ['CT', STATE_COLORS.CT]]) {
       const pts = ds.map((r) => ({ t: r.week, v: r[st] })).filter((p) => p.v != null);
       if (pts.length < 8) continue;
-      wwSeries.push({ label: `${st} ${label}`, pts: indexToMedian(pts), color, dash });
+      wwSeries.push({ label: st, pts: indexToMedian(pts).slice(-104), color, dash });
     }
   }
   if (wwSeries.length) {
@@ -94,8 +95,8 @@ export default function geo(root, ctx) {
           borderColor: s.color, borderDash: s.dash, backgroundColor: 'transparent',
         };
       }),
-      options: { scales: { y: { title: { display: true, text: '% of own median',
-        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } } },
+      options: { unit: '%', scales: { y: { title: { display: true, text: '% of own median',
+        color: '#8797a9', font: { family: 'monospace', size: 9 } } } } },
     });
   }
 }
@@ -133,7 +134,7 @@ function regionRank(naat) {
           ? `<span style="color:${chg > 0 ? '#ef4444' : '#4ade80'}">${chg > 0 ? '▲' : '▼'}</span>` : ''}
       </td>`;
     }).join('');
-    return `<tr><td>${reg}<br><span style="font-size:9px;color:#4b5a6b">${MARKETS.regionNote[reg]}</span></td>${cells}</tr>`;
+    return `<tr><td>${reg}<br><span style="font-size:11.5px;color:#8797a9">${MARKETS.regionNote[reg]}</span></td>${cells}</tr>`;
   }).join('');
   return `<table class="dt">
     <thead><tr><th>Region</th>${keys.map((k) => `<th>${PATHOGENS[k === 'SARS-COV-2' ? 'COVID-19' : k]?.label || k}</th>`).join('')}</tr></thead>

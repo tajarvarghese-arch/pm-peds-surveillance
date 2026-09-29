@@ -25,7 +25,7 @@ export default function about(root, ctx) {
   root.innerHTML = `
     <section class="panel" style="border-color:#22d3ee">
       <h2 style="color:#22d3ee">What this is</h2>
-      <div class="panel-body" style="font-size:12.5px;line-height:1.75;max-width:900px">
+      <div class="panel-body" style="font-size:14px;line-height:1.75;max-width:900px">
         <p style="margin:0 0 10px">
           A decision-support terminal for PM Pediatrics built around one question:
           <strong>how much pediatric respiratory demand is coming, and is the business capturing
@@ -53,7 +53,7 @@ export default function about(root, ctx) {
 
     <section class="panel" style="border-color:#4ade80">
       <h2 style="color:#4ade80">Where company data goes — and where it cannot go</h2>
-      <div class="panel-body" style="font-size:12px;line-height:1.7;max-width:900px">
+      <div class="panel-body" style="font-size:13.5px;line-height:1.7;max-width:900px">
         <p style="margin:0 0 8px">
           <strong>Company data never leaves the browser it is loaded in.</strong> This site is a
           static page — there is no server behind it, no upload endpoint, no database. When a
@@ -67,7 +67,7 @@ export default function about(root, ctx) {
           <li>Anyone else opening this URL sees only the public surveillance half.</li>
           <li>“Erase all from this browser” on the Volumes tab removes every trace.</li>
         </ul>
-        <p style="margin:0;color:#7f8ea0">
+        <p style="margin:0;color:#a3b3c5">
           Practical consequence for presenting: load the spreadsheet on the machine you present from.
           The private tabs are empty on any other device — by design.
         </p>
@@ -100,7 +100,7 @@ export default function about(root, ctx) {
     <div style="height:10px"></div>
 
     ${panel('How to read it — five constructs that carry the site', '',
-      `<div style="font-size:12px;line-height:1.7;max-width:900px">
+      `<div style="font-size:13.5px;line-height:1.7;max-width:900px">
         <p style="margin:0 0 8px"><strong>1 · The Pediatric Pressure Index.</strong> The spine of the
         public half: the share of pediatric emergency-department visits that are respiratory, weighted
         across three age bands. It is this site's own construct (no public index survived to borrow),
@@ -162,7 +162,7 @@ export default function about(root, ctx) {
         </table>`)}
 
       ${panel('What this is not', 'read before relying on any number',
-        `<div style="font-size:11.5px;line-height:1.7">
+        `<div style="font-size:13px;line-height:1.7">
           <p style="margin:0 0 8px">Not clinical guidance — a planning tool for staffing and capacity.</p>
           <p style="margin:0 0 8px">Not a forecast engine. The 8-week projection is a labelled
           heuristic resting on a handful of seasons; direction is the signal, levels are estimates.</p>

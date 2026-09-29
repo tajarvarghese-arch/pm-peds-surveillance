@@ -18,8 +18,9 @@ import { line, bar, hexA } from '../charts.js';
 import { pressureIndex, seasonOf, ordinal } from '../derive.js';
 import { isoWeekOf } from '../analysis.js';
 
-const YEAR_COLORS = ['#64748b', '#94a3b8', '#fbbf24', '#22d3ee', '#a78bfa'];
-const COMP_COLORS = { 'COVID-19': '#22d3ee', Influenza: '#fbbf24', RSV: '#4ade80' };
+// Prior years are context: greys that brighten toward the present.
+const YEAR_COLORS = ['#5b6b7d', '#7f8ea0', '#a9b7c6', '#c9d3de', '#dfe6ee'];
+const COMP_COLORS = { 'COVID-19': '#3987e5', Influenza: '#d95926', RSV: '#199e70' };
 
 /**
  * One window's explanation: pathogen contribution bars plus a sentence
@@ -82,18 +83,24 @@ function explainCard(w, Y) {
   const bars = comps.map((c) => {
     const wpct = (Math.abs(c.delta) / maxAbs * 100).toFixed(0);
     const col = COMP_COLORS[c.k] || '#94a3b8';
-    return '<div style="display:grid;grid-template-columns:64px 1fr 74px;gap:8px;align-items:center">'
-      + '<span style="font-size:10px;color:' + col + '">' + nice(c.k) + '</span>'
-      + '<div style="display:flex;' + (c.delta < 0 ? 'justify-content:flex-end' : '') + '">'
-      + '<div style="height:9px;width:' + wpct + '%;background:'
-      + (c.delta < 0 ? 'rgba(239,68,68,0.8)' : col) + ';min-width:2px"></div></div>'
-      + '<span class="num" style="font-size:10px;color:#7f8ea0">' + pts(c.delta) + '</span></div>';
+    // Diverging around a centre line: shortfall grows left, excess grows right.
+    const neg = c.delta < 0;
+    const half = (Math.abs(c.delta) / maxAbs * 100).toFixed(0);
+    const seg = '<div class="bar-x' + (neg ? ' from-right' : '') + '" style="height:12px;width:' + half
+      + '%;min-width:2px;background:' + col + ';opacity:' + (neg ? '0.55' : '1')
+      + ';border-radius:' + (neg ? '3px 0 0 3px' : '0 3px 3px 0') + '"></div>';
+    return '<div style="display:grid;grid-template-columns:70px 1fr 84px;gap:10px;align-items:center">'
+      + '<span style="font-size:12.5px;color:#b4c2d1"><span style="color:' + col + '">■</span> ' + nice(c.k) + '</span>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr">'
+      + '<div style="display:flex;justify-content:flex-end;border-right:1px solid #2d3f52">' + (neg ? seg : '') + '</div>'
+      + '<div style="display:flex">' + (neg ? '' : seg) + '</div></div>'
+      + '<span class="num" style="font-size:12.5px;color:#eef3f8;text-align:right">' + pts(c.delta) + '</span></div>';
   }).join('');
 
   return '<div style="border:1px solid var(--line);margin-top:8px;padding:8px 10px">'
     + '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
-    + '<strong style="font-size:11.5px">' + w.name + '</strong>'
-    + '<span style="font-size:10px;color:#4b5a6b">contribution vs prior-year median, index points</span></div>'
+    + '<strong style="font-size:13px">' + w.name + '</strong>'
+    + '<span style="font-size:12px;color:#8797a9">contribution vs prior-year median, index points</span></div>'
     + '<div style="display:grid;gap:3px;margin:6px 0">' + bars + '</div>'
     + '<div class="note" style="margin-top:2px">' + sentence + '</div></div>';
 }
@@ -293,7 +300,7 @@ export default function yearTab(root, ctx) {
       <div class="panel-body">
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           ${levelBadge(overall.t, overall.c)}
-          <div style="font-size:12px;color:#d8e0e8;max-width:760px;line-height:1.6">
+          <div style="font-size:13.5px;color:#d8e0e8;max-width:760px;line-height:1.6">
             Cumulative disease pressure through week ${latestW} ranks
             <strong>#${rank} of ${priors.length + 1}</strong> observed years
             ${vsLastPct !== null ? `(${vsLastPct > 0 ? '+' : ''}${vsLastPct.toFixed(0)}% vs ${Y - 1})` : ''}.
@@ -331,9 +338,9 @@ export default function yearTab(root, ctx) {
           <div>
             <div class="chart-wrap"><canvas id="y-strip"></canvas></div>
             <div class="note">Each ${Y} week ranked against the same calendar week of prior years.
-            <span style="color:#ef4444">■</span> record low ·
-            <span style="color:#fbbf24">■</span> record high ·
-            <span style="color:#22d3ee">■</span> in range. A cluster at the bottom right is a regime,
+            <span style="color:#3987e5">■</span> record low ·
+            <span style="color:#e66767">■</span> record high ·
+            <span style="color:#5b6b7d">■</span> in range. A cluster at the bottom right is a regime,
             not noise.</div>
           </div>
         </div>
@@ -349,12 +356,12 @@ export default function yearTab(root, ctx) {
             ${[...priors, Y].map((y) => `<th>${y}</th>`).join('')}<th>Verdict</th></tr></thead>
           <tbody>${windows.map((w) => `<tr>
             <td style="text-align:left">${w.name}${w.open
-              ? ` <span style="color:#4b5a6b;font-size:10px">${w.weeks} wk${w.weeks === 1 ? '' : 's'} so far</span>` : ''}</td>
-            ${w.per.map((p) => `<td class="num" ${p.y === Y ? 'style="font-weight:700"' : 'style="color:#7f8ea0"'}>${p.cum.toFixed(1)}</td>`).join('')}
-            <td>${!w.enough ? '<span style="color:#4b5a6b">too early</span>'
+              ? ` <span style="color:#8797a9;font-size:12px">${w.weeks} wk${w.weeks === 1 ? '' : 's'} so far</span>` : ''}</td>
+            ${w.per.map((p) => `<td class="num" ${p.y === Y ? 'style="font-weight:700"' : 'style="color:#a3b3c5"'}>${p.cum.toFixed(1)}</td>`).join('')}
+            <td>${!w.enough ? '<span style="color:#8797a9">too early</span>'
                 : w.recLow ? '<span class="s-ok">record low</span>'
                 : w.recHigh ? '<span class="s-critical">record high</span>'
-                : '<span style="color:#7f8ea0">in range</span>'}</td>
+                : '<span style="color:#a3b3c5">in range</span>'}</td>
           </tr>`).join('')}</tbody>
         </table>
         <div class="note">The same year can hold a record-high window and a record-low window. For
@@ -372,11 +379,11 @@ export default function yearTab(root, ctx) {
             <td style="text-align:left">${r.k}</td>
             ${[...priors, Y].map((y) => {
               const p = r.per.find((x) => x.y === y);
-              return `<td class="num" ${y === Y ? 'style="font-weight:700"' : 'style="color:#7f8ea0"'}>${p ? p.mean.toFixed(2) : '·'}</td>`;
+              return `<td class="num" ${y === Y ? 'style="font-weight:700"' : 'style="color:#a3b3c5"'}>${p ? p.mean.toFixed(2) : '·'}</td>`;
             }).join('')}
             <td>${r.recLow ? '<span class="s-ok">record low</span>'
                 : r.recHigh ? '<span class="s-critical">record high</span>'
-                : '<span style="color:#7f8ea0">in range</span>'}</td>
+                : '<span style="color:#a3b3c5">in range</span>'}</td>
           </tr>`).join('')}</tbody>
         </table>
         <div class="note">A year can be "down" in total while individual pathogens set records in
@@ -391,10 +398,10 @@ export default function yearTab(root, ctx) {
           <th>Front-loaded</th></tr></thead>
         <tbody>${seasonRows.map((s) => `<tr>
           <td>${s.s}</td>
-          <td class="num" style="color:#7f8ea0">${s.n}</td>
+          <td class="num" style="color:#a3b3c5">${s.n}</td>
           <td class="num">${s.cum.toFixed(0)}</td>
           <td class="num">${s.peak.toFixed(2)}%</td>
-          <td class="num" style="color:#7f8ea0">${s.peakAt.slice(5)}</td>
+          <td class="num" style="color:#a3b3c5">${s.peakAt.slice(5)}</td>
           <td class="num">${s.frontLoad !== null ? (s.frontLoad * 100).toFixed(0) + '%' : '--'}</td>
         </tr>`).join('')}</tbody>
       </table>
@@ -434,13 +441,14 @@ export default function yearTab(root, ctx) {
       return {
         label: String(y),
         data: axis.map((w) => (m.has(w) ? +m.get(w).toFixed(2) : null)),
-        borderColor: isY ? '#fbbf24' : YEAR_COLORS[i % YEAR_COLORS.length],
-        borderWidth: isY ? 2.4 : 1.3,
-        borderDash: isY ? [] : [4, 3],
-        backgroundColor: isY ? hexA('#fbbf24', 0.08) : 'transparent',
+        borderColor: isY ? '#22d3ee' : YEAR_COLORS[i % YEAR_COLORS.length],
+        borderWidth: isY ? 3 : 1.6,
+        emphasis: isY,
+        backgroundColor: isY ? hexA('#22d3ee', 0.08) : 'transparent',
         fill: isY,
       };
     }),
+    options: { scales: { y: { title: { display: true, text: 'cumulative index points' } } } },
   });
 
   bar(document.getElementById('y-strip'), {
@@ -448,13 +456,18 @@ export default function yearTab(root, ctx) {
     datasets: [{
       label: 'percentile vs prior years',
       data: weekRows.map((r) => +r.pct.toFixed(0)),
-      backgroundColor: weekRows.map((r) => (r.recLow ? 'rgba(239,68,68,0.85)'
-        : r.recHigh ? 'rgba(251,191,36,0.85)' : 'rgba(34,211,238,0.6)')),
+      backgroundColor: weekRows.map((r) => (r.recLow ? '#3987e5'
+        : r.recHigh ? '#e66767' : '#5b6b7d')),
+      minBarLength: 3,
     }],
     options: {
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c) => {
+          const r = weekRows[c.dataIndex];
+          return ` ${Math.round(r.pct)}th percentile${r.recLow ? ' · record low' : r.recHigh ? ' · record high' : ''}`;
+        } } } },
       scales: { y: { min: 0, max: 100, title: { display: true, text: 'percentile',
-        color: '#4b5a6b', font: { family: 'monospace', size: 9 } } } },
+        color: '#8797a9', font: { family: 'monospace', size: 9 } } } },
     },
   });
 }

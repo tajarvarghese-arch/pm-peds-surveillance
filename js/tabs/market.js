@@ -13,7 +13,7 @@ import { MARKETS } from '../config.js';
 import { fmtDate } from '../data.js';
 import { rerender } from '../app.js';
 
-const STATE_COLOR = { NY: '#22d3ee', NJ: '#fbbf24', CT: '#4ade80' };
+const STATE_COLOR = { NY: '#3987e5', NJ: '#d95926', CT: '#199e70' };
 
 export default function market(root, ctx) {
   const ms = ctx.db.market_supply;
@@ -97,14 +97,14 @@ export default function market(root, ctx) {
       return {
         label: ab,
         data: years.map((y) => states[ab]?.by_year?.[y] ?? 0),
-        backgroundColor: hexA(STATE_COLOR[ab], 0.75),
+        backgroundColor: STATE_COLOR[ab],
       };
     }),
     options: {
       scales: {
         x: { stacked: false },
         y: { beginAtZero: true, title: { display: true, text: 'new entity registrations',
-          color: '#4b5a6b', font: { family: 'monospace', size: 9 } } },
+          color: '#8797a9', font: { family: 'monospace', size: 9 } } },
       },
     },
   });
@@ -198,9 +198,9 @@ function closurePanel(cl) {
     <td><strong>${e.state || '·'}</strong></td>
     <td style="text-align:left">${e.operator}</td>
     <td style="text-align:left">${e.slug.split('/').pop()}
-      <div style="color:#4b5a6b;font-size:10px">${e.why}</div></td>
-    <td class="num" style="color:#7f8ea0">${e.first_seen}</td>
-    <td class="num" style="color:#7f8ea0">${e.last_seen}</td>
+      <div style="color:#8797a9;font-size:12px">${e.why}</div></td>
+    <td class="num" style="color:#a3b3c5">${e.first_seen}</td>
+    <td class="num" style="color:#a3b3c5">${e.last_seen}</td>
     <td style="text-align:left"><a href="${e.wayback}" target="_blank" rel="noopener">archive</a></td>
   </tr>`;
 
@@ -262,7 +262,7 @@ function limitations(ms) {
     <h2 style="color:#f97316">⚠ What this tab is — and is not
       <span class="sub">read before quoting any number here</span></h2>
     <div class="panel-body">
-      <div style="font-size:12px;margin-bottom:8px">
+      <div style="font-size:13.5px;margin-bottom:8px">
         <strong>There is no public dataset of urgent care openings and closures.</strong>
         That was checked, not assumed:
       </div>
@@ -326,7 +326,7 @@ function chainTable(states, ms) {
 
   return `<table class="dt">
       <thead><tr><th>Operator</th><th>NY</th><th>NJ</th><th>CT</th></tr></thead>
-      <tbody>${rows.join('') || '<tr><td colspan="4" style="color:#4b5a6b">no chain matches</td></tr>'}</tbody>
+      <tbody>${rows.join('') || '<tr><td colspan="4" style="color:#8797a9">no chain matches</td></tr>'}</tbody>
     </table>
     <div class="note gap"><strong>This table badly understates chain presence.</strong>
     CityMD operates on the order of 150 New York sites and returns
@@ -339,7 +339,7 @@ function chainTable(states, ms) {
 function ledgerPanel(events) {
   if (!events.length) {
     return `<div class="empty" style="text-align:left;padding:14px">
-      <div style="color:#7f8ea0;font-size:11.5px;line-height:1.6">
+      <div style="color:#a3b3c5;font-size:13px;line-height:1.6">
         <strong style="color:#d8e0e8">Empty by design.</strong><br><br>
         Since no feed publishes openings and closures, this is where you record what you learn —
         a press release, a local paper, a broker call, a drive-past.<br><br>
@@ -358,10 +358,10 @@ function ledgerPanel(events) {
       <td style="text-align:left">${levelBadge(e.type || '?', cls[e.type] || 'watch')}</td>
       <td style="text-align:left">
         <strong>${e.operator}</strong>
-        <div style="color:#4b5a6b;font-size:10px">${e.site || ''} ${e.state ? `· ${e.state}` : ''}
+        <div style="color:#8797a9;font-size:12px">${e.site || ''} ${e.state ? `· ${e.state}` : ''}
         ${e.source ? `· <a href="${e.source}" target="_blank" rel="noopener">source</a>` : ''}</div>
       </td>
-      <td class="num" style="color:#7f8ea0;font-size:10px">${e.conf || '--'}</td>
+      <td class="num" style="color:#a3b3c5;font-size:12px">${e.conf || '--'}</td>
     </tr>`).join('')}</tbody>
   </table></div>
   <div class="note">Hand-maintained. Nothing here is fetched or verified by any script.</div>`;
@@ -378,8 +378,8 @@ function recentTable(recent) {
         <td class="num" style="color:${STATE_COLOR[r.state]}">${r.state}</td>
         <td style="text-align:left">${r.name}${genericish(r.name)
           ? ' <span class="s-watch" title="generic entity name — often a billing vehicle rather than a clinic">?</span>' : ''}</td>
-        <td style="text-align:left;color:#7f8ea0">${r.city || '--'}</td>
-        <td style="text-align:left;color:#7f8ea0">${r.chain || '<span style="color:#4b5a6b">independent</span>'}</td>
+        <td style="text-align:left;color:#a3b3c5">${r.city || '--'}</td>
+        <td style="text-align:left;color:#a3b3c5">${r.chain || '<span style="color:#8797a9">independent</span>'}</td>
       </tr>`).join('')}</tbody>
     </table></div>
     <div class="note warn">Individual rows are <strong>unverified</strong>. ${flagged} of the
