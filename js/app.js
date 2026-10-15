@@ -103,9 +103,16 @@ async function boot() {
 function renderMasthead() {
   const snapAt = ctx.db.ed_state?.fetched_at || ctx.db.ed_age?.fetched_at;
   const latest = ctx.db.ed_state?.data?.at(-1)?.date;
+  // The pediatric index (age bands, national) is published a week behind the
+  // state feed. Show both, or the header promises a date the Exec tab cannot
+  // deliver.
+  const latestAge = ctx.db.ed_age?.data?.at(-1)?.week;
+  const thru = latest && latestAge && latestAge !== latest
+    ? ` // states thru <span class="s-ok">${fmtDate(latest)}</span>` +
+      ` · pediatric index thru <span class="s-ok">${fmtDate(latestAge)}</span>`
+    : latest ? ` // data thru <span class="s-ok">${fmtDate(latest)}</span>` : '';
   document.getElementById('m-snapshot').innerHTML =
-    `snapshot <span class="s-ok">${snapAt ? snapAt.slice(0, 10) : '--'}</span>` +
-    (latest ? ` // data thru <span class="s-ok">${fmtDate(latest)}</span>` : '');
+    `snapshot <span class="s-ok">${snapAt ? snapAt.slice(0, 10) : '--'}</span>${thru}`;
   document.getElementById('f-build').textContent =
     `sources: ${Object.values(ctx.manifest?.sources || {}).filter((s) => s.ok).length} live CDC datasets`;
 }
