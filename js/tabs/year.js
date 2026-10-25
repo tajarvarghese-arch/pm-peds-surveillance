@@ -331,7 +331,7 @@ export default function yearTab(root, ctx) {
             <div class="chart-wrap"><canvas id="y-race"></canvas></div>
             <div class="note">Cumulative disease pressure by calendar week, one line per year. Where
             the ${Y} line sits in the pack — and where it bends away — is the year's story in one
-            picture.</div>
+            picture. Drag across the chart to zoom; double-click to reset.</div>
           </div>
           <div>
             <div class="chart-wrap"><canvas id="y-strip"></canvas></div>
@@ -446,7 +446,10 @@ export default function yearTab(root, ctx) {
         fill: isY,
       };
     }),
-    options: { scales: { y: { title: { display: true, text: 'cumulative index points' } } } },
+    options: {
+      zoomSelect: { range: ctx.yearZoom || null, onChange: (lo, hi) => { ctx.yearZoom = lo == null ? null : [lo, hi]; } },
+      scales: { y: { title: { display: true, text: 'cumulative index points' } } },
+    },
   });
 
   bar(document.getElementById('y-strip'), {

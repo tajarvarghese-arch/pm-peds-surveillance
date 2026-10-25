@@ -1,13 +1,12 @@
 // Executive summary: one screen that answers "do I need more staff soon?"
 
 import { panel, tile, num, delta, levelBadge, labelsFrom, valuesFrom, empty } from '../ui.js';
-import { line, bar, hexA, sparkline, SERIES, AGE_COLORS, yearColor } from '../charts.js';
+import { line, bar, hexA, sparkline, SERIES, AGE_COLORS, yearColor, setXRange } from '../charts.js';
 import { PATHOGENS, PED_AGES, MARKETS } from '../config.js';
 import { pressureIndex, staffing, d1, d2, seasonalBands, isoWeek, seasonOf, percentileRank,
   indexQuantum, wastewaterSignal, corroborate, quantile } from '../derive.js';
 import { wwSeries } from './wastewater.js';
 import { series, toWeekly, fmtDate } from '../data.js';
-import { renderIso, attachOrbit } from '../iso3d.js';
 import { rerender } from '../app.js';
 
 // Week-of-season axis: respiratory seasons run w27 -> w26 of the next year.
@@ -108,29 +107,6 @@ export default function exec(root, ctx) {
          'independent signal · advisory only', ''),
   ];
 
-  // --- season overlay -----------------------------------------------------
-  const bands = seasonalBands(ppi);
-  const bySeason = new Map();
-  for (const p of ppi) {
-    const s = seasonOf(p.t);
-    if (!bySeason.has(s)) bySeason.set(s, []);
-    bySeason.get(s).push({ w: isoWeek(p.t), v: p.v, t: p.t });
-  }
-  const seasons = [...bySeason.keys()].sort();
-  const curSeason = seasons.at(-1);
-  const prevSeason = seasons.at(-2);
-
-  // Plot on a week-of-season axis (27..52,1..26)
-  const axis = [...Array(26).keys()].map((i) => i + 27).concat([...Array(26).keys()].map((i) => i + 1));
-  const pick = (s) => {
-    const m = new Map((bySeason.get(s) || []).map((p) => [p.w, p.v]));
-    return axis.map((w) => (m.has(w) ? +m.get(w).toFixed(3) : null));
-  };
-  const bandLo = axis.map((w) => (bands.get(w) ? +bands.get(w).p25.toFixed(3) : null));
-  const bandHi = axis.map((w) => (bands.get(w) ? +bands.get(w).p75.toFixed(3) : null));
-  const nMin = Math.min(...[...bands.values()].map((b) => b.n));
-  const nMax = Math.max(...[...bands.values()].map((b) => b.n));
-
   // --- pathogen status strip ---------------------------------------------
   const statusRows = pathogenStatus(posNat, naat, edAge, ctx.region);
 
@@ -146,32 +122,14 @@ export default function exec(root, ctx) {
 
     <div style="height:10px"></div>
 
-    ${topographyPanel(ppi)}
+    ${seasonPanel(ppi, ctx)}
 
     <div style="height:10px"></div>
 
-    <div class="grid g-2-1" style="margin-bottom:10px">
-      ${panel('Season overlay — pediatric pressure index',
-        `p25–p75 band from ${seasons.length} seasons (n=${nMin}–${nMax}/wk)`,
-        `<div style="display:flex;gap:6px;margin-bottom:6px">
-           <button class="ghost" id="ov-lin" aria-pressed="${!ctx.overlayLog}">linear</button>
-           <button class="ghost" id="ov-log" aria-pressed="${!!ctx.overlayLog}">log</button>
-           <span style="margin-left:auto;color:#8797a9;font-size:12px;align-self:center">
-             this series spans ~35× floor to peak</span>
-         </div>
-         <div class="chart-wrap tall"><canvas id="c-overlay"></canvas></div>
-         <div class="note">A linear axis has to hold the winter peak, which flattens the summer floor
-         into a straight line. <strong>Log scale</strong> gives proportional moves equal visual weight,
-         so an off-season ramp is visible at the bottom of the range.</div>
-         <div class="note warn">Bands are computed over <strong>${seasons.length} seasons</strong>, not ten.
-         NSSP ED surveillance begins 2022-09-25. A p75 built on ${nMin}–${nMax} observations per week
-         is a rough envelope, not a stable percentile.</div>`)}
-
+    <div class="grid g3">
       ${panel('Market activity level', 'CDC ARI activity · current week only',
         marketLevels(ari, edState))}
-    </div>
 
-    <div class="grid g2">
       ${panel('Pathogen status', `positivity + ED share · ${ctx.region}`,
         `<div class="scroll-y">${statusRows}</div>`, { tight: true })}
 
@@ -182,48 +140,8 @@ export default function exec(root, ctx) {
     </div>
   `;
 
-  mountIso(ctx);
+  mountSeason(ppi, ctx);
   mountRecent(ppi, quantum);
-
-  // overlay chart
-  const ds = [
-    { label: 'p25–p75', data: bandLo, borderColor: 'transparent', backgroundColor: 'transparent',
-      pointRadius: 0, fill: false },
-    { label: `${seasons.length}-season p25–p75`, data: bandHi, borderColor: 'transparent',
-      backgroundColor: hexA('#22d3ee', 0.10), pointRadius: 0, fill: '-1' },
-  ];
-  if (prevSeason) {
-    ds.push({ label: `${prevSeason} (last season)`, shortLabel: prevSeason, data: pick(prevSeason),
-              borderColor: yearColor(prevSeason, curSeason), backgroundColor: 'transparent' });
-  }
-  ds.push({ label: `${curSeason} (current)`, data: pick(curSeason), borderColor: SERIES.focus,
-            emphasis: true, backgroundColor: 'transparent' });
-
-  line(document.getElementById('c-overlay'), {
-    labels: axis.map((w) => `w${w}`),
-    datasets: ds,
-    options: {
-      unit: '%',
-      scales: {
-        x: { ticks: { callback(v, i) { const m = MONTH_TICKS.find((t) => t.at === i); return m ? m.label : null; },
-          autoSkip: false } },
-        y: {
-          // Logarithmic gives proportional moves equal visual weight, which is
-          // the only way an off-season ramp near 0.6% is legible on an axis
-          // that must also hold a 23% winter peak.
-          type: ctx.overlayLog ? 'logarithmic' : 'linear',
-          title: { display: true, text: `% ED visits${ctx.overlayLog ? ' (log)' : ''}`,
-            color: '#8797a9', font: { family: 'monospace', size: 9 } },
-        },
-      },
-    },
-  });
-
-  const setScale = (v) => { ctx.overlayLog = v; rerender(); };
-  const lin = document.getElementById('ov-lin');
-  const log = document.getElementById('ov-log');
-  if (lin) lin.onclick = () => setScale(false);
-  if (log) log.onclick = () => setScale(true);
 
   // age band chart
   const recent = edAge.slice(-78);
@@ -444,46 +362,38 @@ function methodPanel(edAge, ctx, alert, quantum) {
 }
 
 /**
- * Season topography: one ridge per season receding into depth, plus a dashed
- * ghost ridge carrying the prior-season median so the current season can be
- * read against expectation directly in the geometry.
+ * Season comparison. Every season on one week-of-season axis, each in its own
+ * colour, with the prior-season median and p25-p75 band behind them. Seasons
+ * toggle on and off, the axis zooms to a preset window or to any span dragged
+ * on the plot, and the scale switches between level, log, and "relative" --
+ * each week as a percentage of the median of the other seasons at that week,
+ * which makes a 2% summer and a 20% winter comparable on one axis.
  */
-function topographyPanel(ppi) {
+const SEASON_PRESETS = [
+  { id: 'todate', label: 'Season to date' },
+  { id: 'ramp', label: 'Ramp · Sep–Dec', lo: 9, hi: 25 },
+  { id: 'peak', label: 'Peak · Nov–Feb', lo: 18, hi: 33 },
+  { id: 'spring', label: 'Spring · Feb–Jun', lo: 31, hi: 51 },
+  { id: 'full', label: 'Full season', lo: null, hi: null },
+];
+
+function seasonState(ctx, keys) {
+  const cur = keys.at(-1);
+  if (!ctx.season || ctx.season.cur !== cur) {
+    // Default: the current season against the two before it, season to date.
+    ctx.season = { cur, on: new Set(keys.slice(-3)), median: true, band: true,
+                   scale: 'linear', preset: 'todate', range: null };
+  }
+  return ctx.season;
+}
+
+function seasonPanel(ppi, ctx) {
   const seasons = bySeasonMap(ppi);
   const keys = [...seasons.keys()].sort();
-  if (keys.length < 2) return panel('Season topography', '', empty('need at least two seasons'));
-  const currentKey = keys[keys.length - 1];
-  const priorKeys = keys.slice(0, -1);
+  if (keys.length < 2) return panel('Season comparison', '', empty('need at least two seasons'));
+  const currentKey = keys.at(-1);
+  const st = seasonState(ctx, keys);
   const dev = seasonDeviation(seasons, currentKey);
-
-  // Prior-season median at every week of the season.
-  const ghost = new Map();
-  for (const w of SEASON_AXIS) {
-    const vals = priorKeys.map((k) => seasons.get(k).get(w)).filter((v) => v != null)
-      .sort((a, b) => a - b);
-    if (vals.length) ghost.set(w, quantile(vals, 0.5));
-  }
-
-  const maxV = Math.max(...ppi.map((p) => p.v));
-
-  // One colour per season, the same the Year tab and the charts above use.
-  const ridges = priorKeys.map((k, i) => {
-    const col = yearColor(k, currentKey);
-    return {
-      key: k, label: k, values: seasons.get(k),
-      color: col, fill: hexA(col, 0.20),
-      width: 1.6, current: false,
-    };
-  });
-  ridges.push({
-    key: 'median', label: 'prior median', values: ghost,
-    color: '#eef3f8', fill: 'rgba(238,243,248,0.06)',
-    width: 1.6, dash: '5 4', current: false,
-  });
-  ridges.push({
-    key: currentKey, label: currentKey, values: seasons.get(currentKey),
-    color: '#22d3ee', fill: 'rgba(34,211,238,0.28)', width: 2.6, current: true,
-  });
 
   const devCls = !dev ? '' : dev.latest.dev < -25 ? 's-ok'
     : dev.latest.dev > 25 ? 's-critical' : 's-watch';
@@ -516,33 +426,40 @@ function topographyPanel(ppi) {
       </tr>`).join('')}</tbody>
     </table>`;
 
-  window.__isoModel = { axis: SEASON_AXIS, ridges, maxV, monthTicks: MONTH_TICKS };
+  const chip = (id, label, color, on, dash = false) => `
+    <button class="chip" data-season="${id}" aria-pressed="${on}" style="--c:${color}">
+      <i class="${dash ? 'dash' : ''}"></i>${label}</button>`;
+
+  const chips = keys.map((k) => chip(k, k === currentKey ? `${k} (current)` : k,
+    yearColor(k, currentKey), st.on.has(k))).join('')
+    + chip('median', 'prior median', '#eef3f8', st.median, true)
+    + chip('band', 'p25–p75 band', 'rgba(34,211,238,0.6)', st.band);
 
   return `<section class="panel">
-    <h2>Season topography — pediatric pressure index
-      <span class="sub">${keys.length} seasons · drag to orbit</span></h2>
+    <h2>Season comparison — pediatric pressure index
+      <span class="sub">${keys.length} seasons on one week-of-season axis (Jul → Jun)</span></h2>
     <div class="panel-body">
-      <div class="grid g-2-1">
+      <div class="chip-row" id="season-chips">${chips}</div>
+      <div class="chip-row" style="margin-top:6px">
+        <span class="chip-label">Zoom</span>
+        ${SEASON_PRESETS.map((p) => `<button class="ghost" data-preset="${p.id}"
+          aria-pressed="${st.preset === p.id}">${p.label}</button>`).join('')}
+        <span class="chip-label" style="margin-left:14px">Scale</span>
+        ${[['linear', 'Level'], ['log', 'Log'], ['rel', '% of typical']].map(([v, l]) =>
+          `<button class="ghost" data-scale="${v}" aria-pressed="${st.scale === v}">${l}</button>`).join('')}
+        <span style="margin-left:auto;color:#8797a9;font-size:12px">
+          drag across the chart to zoom · double-click to reset</span>
+      </div>
+      <div class="grid g-2-1" style="margin-top:10px">
         <div>
-          <div id="iso-host" style="height:420px"></div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <button class="ghost" data-iso="-22,40">default</button>
-            <button class="ghost" data-iso="0,80">plan</button>
-            <button class="ghost" data-iso="-60,35">raking</button>
-            <button class="ghost" data-iso="0,22">side</button>
-            <span style="margin-left:auto;color:#8797a9;font-size:12px;align-self:center">
-              drag the scene to rotate</span>
-          </div>
+          <div class="chart-wrap" style="height:440px"><canvas id="c-season"></canvas></div>
+          <div class="note" id="season-note"></div>
         </div>
         <div>
           ${summary}
-          <div class="scroll-y" style="max-height:210px">${devTable}</div>
+          <div class="scroll-y" style="max-height:300px">${devTable}</div>
         </div>
       </div>
-      <div class="note">Each ridge is one season on a week-of-season axis (w27→w26). Depth is the only
-      thing the third dimension encodes — it is not decoration. The dashed white ridge is the
-      <strong>median of the ${priorKeys.length} prior seasons</strong>, placed directly behind the
-      current season so the gap between them is the deviation. Older seasons fade with depth.</div>
       ${dev && dev.rows.length < 6 ? `<div class="note warn">The ${currentKey} season is only
       ${dev.rows.length} week${dev.rows.length === 1 ? '' : 's'} old. The deviation is real but rests on
       a short overlap, and summer weeks sit near the floor of the index where small absolute moves read
@@ -665,19 +582,154 @@ function mountRecent(ppi, quantum) {
   });
 }
 
-function mountIso(ctx) {
-  const host = document.getElementById('iso-host');
-  if (!host || !window.__isoModel) return;
-  ctx.iso ||= { yaw: -22, pitch: 40 };
-  const draw = () => {
-    const svg = renderIso(host, window.__isoModel, ctx.iso);
-    attachOrbit(svg, ctx.iso, () => draw());
+function mountSeason(ppi, ctx) {
+  const canvas = document.getElementById('c-season');
+  if (!canvas) return;
+  const seasons = bySeasonMap(ppi);
+  const keys = [...seasons.keys()].sort();
+  const currentKey = keys.at(-1);
+  const st = seasonState(ctx, keys);
+  const axis = SEASON_AXIS;
+  const idx = (w) => axis.indexOf(w);
+  const curWeeks = [...seasons.get(currentKey).keys()];
+  const curEnd = Math.max(...curWeeks.map(idx));
+
+  // Prior-season median + quartiles at every week, over every season but the
+  // current one -- the reference the current season is judged against.
+  const ref = new Map();
+  for (const w of axis) {
+    const vals = keys.filter((k) => k !== currentKey).map((k) => seasons.get(k).get(w))
+      .filter((v) => v != null).sort((a, b) => a - b);
+    if (vals.length) ref.set(w, { med: quantile(vals, 0.5), lo: quantile(vals, 0.25), hi: quantile(vals, 0.75), n: vals.length });
+  }
+  // For "% of typical", each season is measured against the median of the
+  // OTHER seasons at that week, so a season is never compared to itself.
+  const medExcluding = (k, w) => {
+    const vals = keys.filter((x) => x !== k).map((x) => seasons.get(x).get(w))
+      .filter((v) => v != null).sort((a, b) => a - b);
+    return vals.length ? quantile(vals, 0.5) : null;
   };
+  const isRel = () => st.scale === 'rel';
+  const valueOf = (k, w) => {
+    const v = seasons.get(k).get(w);
+    if (v == null) return null;
+    if (!isRel()) return +v.toFixed(3);
+    const m = medExcluding(k, w);
+    return m ? +((v / m) * 100).toFixed(1) : null;
+  };
+
+  const rangeFor = () => {
+    if (st.range) return st.range;
+    const p = SEASON_PRESETS.find((x) => x.id === st.preset) || SEASON_PRESETS[0];
+    if (p.id === 'todate') return [0, Math.min(axis.length - 1, Math.max(curEnd + 2, 8))];
+    return p.lo == null ? null : [p.lo, p.hi];
+  };
+
+  const draw = () => {
+    const rel = isRel();
+    const ds = [];
+    if (st.band && !rel) {
+      ds.push({ label: 'band lo', data: axis.map((w) => ref.get(w)?.lo ?? null), borderColor: 'transparent',
+        backgroundColor: 'transparent', pointRadius: 0, fill: false });
+      ds.push({ label: 'prior p25–p75', data: axis.map((w) => ref.get(w)?.hi ?? null), borderColor: 'transparent',
+        backgroundColor: hexA('#22d3ee', 0.10), pointRadius: 0, fill: '-1' });
+    }
+    if (st.median) {
+      ds.push({ label: 'prior median', shortLabel: 'median',
+        data: axis.map((w) => (rel ? (ref.get(w) ? 100 : null) : (ref.get(w) ? +ref.get(w).med.toFixed(3) : null))),
+        borderColor: '#eef3f8', borderDash: [5, 4], borderWidth: 1.6, backgroundColor: 'transparent' });
+    }
+    for (const k of keys) {
+      if (!st.on.has(k)) continue;
+      const cur = k === currentKey;
+      ds.push({ label: cur ? `${k} (current)` : k, shortLabel: k,
+        data: axis.map((w) => valueOf(k, w)),
+        borderColor: yearColor(k, currentKey), emphasis: cur,
+        borderWidth: cur ? 3 : 2, backgroundColor: 'transparent',
+        pointRadius: cur ? 2.5 : 0, pointBackgroundColor: yearColor(k, currentKey) });
+    }
+    const range = rangeFor();
+    line(canvas, {
+      labels: axis.map((w) => `w${w}`),
+      datasets: ds,
+      options: {
+        unit: '%',
+        zoomSelect: {
+          range,
+          onChange: (lo, hi) => {
+            st.range = lo == null ? null : [lo, hi];
+            if (lo == null) st.preset = 'full';
+            else st.preset = null;
+            document.querySelectorAll('[data-preset]').forEach((b) =>
+              b.setAttribute('aria-pressed', String(b.dataset.preset === st.preset)));
+            note();
+          },
+        },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { autoSkip: false, callback(v, i) {
+            const m = MONTH_TICKS.find((t) => t.at === i);
+            // Month names when the whole season is in view; week numbers when zoomed.
+            const r = rangeFor();
+            const span = r ? r[1] - r[0] : axis.length;
+            if (span <= 30) return i % 2 === 0 ? `w${axis[i]}` : null;
+            return m ? m.label : null;
+          } } },
+          y: {
+            type: st.scale === 'log' ? 'logarithmic' : 'linear',
+            title: { display: true, text: rel ? '% of typical week (median of other seasons = 100)'
+              : `% ED visits${st.scale === 'log' ? ' (log)' : ''}` },
+          },
+        },
+      },
+    });
+    note();
+  };
+
+  const note = () => {
+    const el = document.getElementById('season-note');
+    if (!el) return;
+    const rel = isRel();
+    const r = rangeFor();
+    const span = r ? `weeks w${axis[r[0]]}–w${axis[r[1]]}` : 'the full season';
+    const n = [...st.on].length;
+    el.innerHTML = rel
+      ? `Showing ${span}. Each season is drawn as a percentage of the <strong>median of the other
+         seasons</strong> at that week, so the dashed line at 100 is "typical", and a 2% summer week
+         and a 20% winter week sit on the same footing. Read the gap from 100, not the level.`
+      : `Showing ${span}, ${n} season${n === 1 ? '' : 's'}. The dashed white line is the median of the
+         ${keys.length - 1} prior seasons; the shaded band is their p25–p75 — a rough envelope from
+         ${keys.length - 1} observations, not a stable percentile. ${st.scale === 'log'
+           ? 'Log scale gives proportional moves equal weight, so the summer floor stays legible under the winter peak.'
+           : 'Switch to Log to see the summer floor, or "% of typical" to compare shapes across magnitudes.'}`;
+  };
+
   draw();
-  document.querySelectorAll('[data-iso]').forEach((b) => {
+
+  const root = canvas.closest('.panel');
+  root.querySelectorAll('[data-season]').forEach((b) => {
     b.onclick = () => {
-      const [y, p] = b.dataset.iso.split(',').map(Number);
-      ctx.iso.yaw = y; ctx.iso.pitch = p;
+      const id = b.dataset.season;
+      if (id === 'median') st.median = !st.median;
+      else if (id === 'band') st.band = !st.band;
+      else if (id === currentKey) return;            // the current season is always shown
+      else if (st.on.has(id)) st.on.delete(id); else st.on.add(id);
+      b.setAttribute('aria-pressed', String(id === 'median' ? st.median : id === 'band' ? st.band : st.on.has(id)));
+      draw();
+    };
+  });
+  root.querySelectorAll('[data-preset]').forEach((b) => {
+    b.onclick = () => {
+      st.preset = b.dataset.preset;
+      st.range = null;
+      root.querySelectorAll('[data-preset]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      draw();
+    };
+  });
+  root.querySelectorAll('[data-scale]').forEach((b) => {
+    b.onclick = () => {
+      st.scale = b.dataset.scale;
+      root.querySelectorAll('[data-scale]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
       draw();
     };
   });

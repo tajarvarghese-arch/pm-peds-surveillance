@@ -100,6 +100,8 @@ function lastPoint(chart, i) {
     const v = raw && typeof raw === 'object' ? raw.y : raw;
     const el = meta.data[k];
     if (v !== null && v !== undefined && !Number.isNaN(+v) && el) {
+      const a = chart.chartArea;
+      if (a && (el.x > a.right + 1 || el.x < a.left - 1)) continue;   // outside the zoomed range
       return { x: el.x, y: el.y, v: +v, k };
     }
   }
@@ -368,7 +370,87 @@ const pulsePlugin = {
   },
 };
 
-const PLUGINS = [revealPlugin, crosshairPlugin, endLabelPlugin, pulsePlugin, legendGapPlugin];
+/**
+ * Drag to zoom. Press and drag across the plot to select a span of the x
+ * axis; release to zoom to it; double-click to reset. Opt in per chart with
+ * options.zoomSelect = { onChange(lo, hi) } -- lo/hi are label indices, or
+ * null on reset, so the tab can remember the range across re-renders.
+ */
+const zoomPlugin = {
+  id: 'zoomSelect',
+  afterInit(chart) {
+    const opt = chart.options.zoomSelect;
+    if (!opt) return;
+    const c = chart.canvas;
+    const px = (e) => e.clientX - c.getBoundingClientRect().left;
+    let start = null;
+    const down = (e) => {
+      if (e.button !== 0) return;
+      const a = chart.chartArea;
+      const x = px(e);
+      if (x < a.left || x > a.right) return;
+      start = x;
+      chart.$sel = { a: x, b: x };
+    };
+    const move = (e) => {
+      if (start === null) return;
+      chart.$sel.b = Math.max(chart.chartArea.left, Math.min(chart.chartArea.right, px(e)));
+      chart.draw();
+    };
+    const up = () => {
+      if (start === null) return;
+      const { a, b } = chart.$sel;
+      start = null;
+      chart.$sel = null;
+      if (Math.abs(b - a) < 8) { chart.draw(); return; }
+      const sx = chart.scales.x;
+      const n = chart.data.labels.length - 1;
+      let lo = Math.round(sx.getValueForPixel(Math.min(a, b)));
+      let hi = Math.round(sx.getValueForPixel(Math.max(a, b)));
+      lo = Math.max(0, Math.min(n, lo));
+      hi = Math.max(0, Math.min(n, hi));
+      if (hi - lo < 2) hi = Math.min(n, lo + 2);
+      setXRange(chart, lo, hi);
+      opt.onChange?.(lo, hi);
+    };
+    const dbl = () => { setXRange(chart, null, null); opt.onChange?.(null, null); };
+    c.addEventListener('mousedown', down);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    c.addEventListener('dblclick', dbl);
+    c.style.cursor = 'crosshair';
+    chart.$zoomOff = () => {
+      c.removeEventListener('mousedown', down);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      c.removeEventListener('dblclick', dbl);
+    };
+    if (opt.range && opt.range[0] != null) setXRange(chart, opt.range[0], opt.range[1]);
+  },
+  afterDatasetsDraw(chart) {
+    const s = chart.$sel;
+    if (!s) return;
+    const a = chart.chartArea;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.fillStyle = 'rgba(34,211,238,0.12)';
+    ctx.fillRect(Math.min(s.a, s.b), a.top, Math.abs(s.b - s.a), a.height);
+    ctx.strokeStyle = 'rgba(34,211,238,0.7)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.min(s.a, s.b) + 0.5, a.top + 0.5, Math.abs(s.b - s.a), a.height - 1);
+    ctx.restore();
+  },
+  afterDestroy(chart) { chart.$zoomOff?.(); },
+};
+
+/** Zoom a category x axis to label indices [lo, hi]; null resets. */
+export function setXRange(chart, lo, hi) {
+  const x = chart.options.scales.x;
+  if (lo == null) { delete x.min; delete x.max; } else { x.min = lo; x.max = hi; }
+  chart.update('none');
+}
+
+const PLUGINS = [revealPlugin, crosshairPlugin, endLabelPlugin, pulsePlugin, legendGapPlugin, zoomPlugin];
 
 // ---------------------------------------------------------------------------
 // options
