@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-15T17:40:00+00:00",
+ "generated_at": "2026-11-16T20:57:21+00:00",
  "markets": {
   "states": [
    "New York",
@@ -63,9 +63,9 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly",
    "note": "Categorical activity level.",
-   "rows": 1,
+   "rows": 58,
    "ok": true,
-   "first": "2026-11-07",
+   "first": "2025-10-04",
    "last": "2026-11-07"
   },
   "respnet": {
