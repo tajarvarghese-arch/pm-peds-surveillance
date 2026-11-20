@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-19T19:28:01+00:00",
+ "generated_at": "2026-11-20T19:03:50+00:00",
  "markets": {
   "states": [
    "New York",
@@ -19,10 +19,10 @@
    "geography": "United States only (no state breakout exists)",
    "cadence": "weekly",
    "note": "Primary pediatric volume proxy. Age bands <1/1-4/5-17.",
-   "rows": 215,
+   "rows": 216,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-11-07"
+   "last": "2026-11-14"
   },
   "ed_state": {
    "source": "CDC NSSP ED Respiratory Daily",
@@ -41,10 +41,10 @@
    "geography": "National / HHS Region 1 / HHS Region 2",
    "cadence": "weekly",
    "note": "PIV, HMPV, Adenovirus, RV/EV, HCOV, RSV, SARS-CoV-2. NO influenza.",
-   "rows": 384,
+   "rows": 385,
    "ok": true,
    "first": "2019-07-06",
-   "last": "2026-11-07"
+   "last": "2026-11-14"
   },
   "pos_national": {
    "source": "CDC Percent of Tests Positive for Viral Respiratory Pathogens",
@@ -52,10 +52,10 @@
    "geography": "United States",
    "cadence": "weekly",
    "note": "Only live source of influenza positivity. National only.",
-   "rows": 215,
+   "rows": 216,
    "ok": true,
    "first": "2022-10-01",
-   "last": "2026-11-07"
+   "last": "2026-11-14"
   },
   "ari_level": {
    "source": "CDC Level of Acute Respiratory Illness Activity",
@@ -63,10 +63,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly",
    "note": "Categorical activity level.",
-   "rows": 58,
+   "rows": 59,
    "ok": true,
    "first": "2025-10-04",
-   "last": "2026-11-07"
+   "last": "2026-11-14"
   },
   "respnet": {
    "source": "CDC RESP-NET (FluSurv/COVID/RSV-NET)",
@@ -74,10 +74,10 @@
    "geography": "Overall (network catchment)",
    "cadence": "weekly",
    "note": "Pediatric hospitalization rates per 100k. Severity denominator.",
-   "rows": 401,
+   "rows": 403,
    "ok": true,
    "first": "2018-10-06",
-   "last": "2026-10-31"
+   "last": "2026-11-14"
   },
   "igas": {
    "source": "CDC ABCs Group A Streptococcus",
@@ -96,10 +96,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 219,
+   "rows": 220,
    "ok": true,
    "first": "2022-08-29",
-   "last": "2026-11-02"
+   "last": "2026-11-09"
   },
   "ww_flu": {
    "source": "CDC NWSS Wastewater -- Influenza A",
@@ -107,10 +107,10 @@
    "geography": "NY / NJ / CT",
    "cadence": "weekly (aggregated from per-sample)",
    "note": "Population-weighted mean concentration. Replaces defunct Biobot feed.",
-   "rows": 197,
+   "rows": 198,
    "ok": true,
    "first": "2023-01-30",
-   "last": "2026-11-02"
+   "last": "2026-11-09"
   }
  }
 }
