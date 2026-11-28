@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-27T19:54:00+00:00",
+ "generated_at": "2026-11-28T18:52:22+00:00",
  "markets": {
   "states": [
    "New York",
@@ -41,10 +41,10 @@
    "geography": "National / HHS Region 1 / HHS Region 2",
    "cadence": "weekly",
    "note": "PIV, HMPV, Adenovirus, RV/EV, HCOV, RSV, SARS-CoV-2. NO influenza.",
-   "rows": 385,
+   "rows": 386,
    "ok": true,
    "first": "2019-07-06",
-   "last": "2026-11-14"
+   "last": "2026-11-21"
   },
   "pos_national": {
    "source": "CDC Percent of Tests Positive for Viral Respiratory Pathogens",
